@@ -1,0 +1,46 @@
+# ====================================================================
+# LifeLink — Project .gitignore
+# ====================================================================
+
+# --- Java & Maven Build Output ---
+target/
+**/target/
+*.class
+*.jar
+*.war
+hs_err_pid*
+replay_pid*
+
+# --- Frontend & Node Build Output ---
+**/node_modules/
+node_modules/
+frontend/dist/
+frontend/.vite/
+coverage/
+
+# --- Environment & Secrets ---
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+!.env.example
+!frontend/.env.example
+
+# --- Logs ---
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- IDEs & OS ---
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

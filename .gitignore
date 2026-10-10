@@ -1,0 +1,79 @@
+# ====================================================================
+# LifeLink — Root .gitignore
+# ====================================================================
+
+# --- Java & Maven Build Output ---
+**/target/
+target/
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+
+# --- Node & Frontend Build Output ---
+**/node_modules/
+node_modules/
+**/dist/
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+coverage/
+
+# --- Environment & Secret Configuration ---
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.cert
+*.crt
+
+# --- Logs & Crash Dumps ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- IntelliJ IDEA ---
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# --- Eclipse & STS ---
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+
+# --- VS Code ---
+.vscode/*
+!.vscode/extensions.json
+
+# --- Operating System Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
