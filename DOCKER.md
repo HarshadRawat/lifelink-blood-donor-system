@@ -8,22 +8,22 @@ This guide details the **industry-grade Docker containerization** architecture f
 
 ```mermaid
 graph TD
-    Client["Browser / Client"] -->|Port 80 / HTTP| Nginx["Frontend Container (Nginx 1.27 Alpine)"]
+    Client["Browser / Client"] -->|"Port 80 / HTTP"| Nginx["Frontend Container (Nginx 1.27 Alpine)"]
     
-    subgraph "Docker Network: lifelink-network"
-        Nginx -->|Serves Static SPA| ReactApp["React 19 + Vite Dist Bundle"]
-        Nginx -->|Reverse Proxy /api/*| Backend["Backend Container (Spring Boot 4.x / Temurin 17 JRE)"]
-        Nginx -->|WebSocket Proxy /ws| Backend
+    subgraph DockerNetwork["Docker Network: lifelink-network"]
+        Nginx -->|"Serves Static SPA"| ReactApp["React 19 + Vite Dist Bundle"]
+        Nginx -->|"Reverse Proxy /api/*"| Backend["Backend Container (Spring Boot 4.x / Temurin 17 JRE)"]
+        Nginx -->|"WebSocket Proxy /ws"| Backend
         
-        Backend -->|JDBC Port 3306| MySQL["Database Container (MySQL 8.0)"]
+        Backend -->|"JDBC Port 3306"| MySQL["Database Container (MySQL 8.0)"]
     end
     
-    subgraph "Host Direct Access (Dev / Admin)"
-        Client -.->|Port 8080 (Optional direct)| Backend
-        Client -.->|Port 3307 (MySQL Workbench)| MySQL
+    subgraph HostAccess["Host Direct Access - Dev / Admin"]
+        Client -.->|"Port 8080: Direct Backend"| Backend
+        Client -.->|"Port 3307: MySQL Workbench"| MySQL
     end
     
-    MySQL -->|Persistent Storage| Volume[("Named Volume: lifelink_mysql_data")]
+    MySQL -->|"Persistent Storage"| Volume[("Named Volume: lifelink_mysql_data")]
 ```
 
 ### Key Architectural Highlights
