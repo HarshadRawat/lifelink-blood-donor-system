@@ -5,6 +5,7 @@
 [![React](https://img.shields.io/badge/React-19.2-61dafb.svg)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-8.3-646cff.svg)](https://vitejs.dev/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1.svg)](https://www.mysql.com/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](DOCKER.md)
 [![Tests](https://img.shields.io/badge/Tests-132%20Passed-success.svg)](#testing)
 
 LifeLink is an emergency blood coordination platform built with Java Spring Boot and React. It bridges the critical latency gap between hospital blood shortages and nearby eligible donors using geolocation radius search, biological blood compatibility matrix matching, real-time push notifications over WebSockets, and privacy-first contact sharing.
@@ -190,13 +191,35 @@ blood-donor-system/
 
 ## Quick Start & Setup
 
-### 1. Database Setup
+### Option 1: Run with Docker Compose (Recommended — Zero Host Setup)
+
+Run the entire full-stack application (MySQL 8.0, Spring Boot backend, and React Nginx frontend) in isolated containers with a single command:
+
+```powershell
+# 1. (Optional) Copy example Docker environment configuration
+cp .env.docker.example .env
+
+# 2. Build and run all containers in background
+docker compose up -d --build
+```
+
+* **Frontend Web Portal**: [http://localhost](http://localhost) (Port 80)
+* **Swagger UI API Docs**: [http://localhost/swagger-ui.html](http://localhost/swagger-ui.html)
+* **Direct Backend API**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+
+For in-depth Docker commands, live logs, volume backups, and custom port configuration, see the [Enterprise Docker Guide (DOCKER.md)](DOCKER.md).
+
+---
+
+### Option 2: Local Manual Setup (Non-Docker)
+
+#### 1. Database Setup
 Log into your MySQL terminal or GUI and create the database:
 ```sql
 CREATE DATABASE blood_donor_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 2. Configure Environment
+#### 2. Configure Environment
 Copy `.env.example` to `.env` or set your environment variables:
 ```powershell
 $env:DB_USERNAME="root"
@@ -204,7 +227,7 @@ $env:DB_PASSWORD="your_mysql_password"
 ```
 *(By default, `application.properties` falls back to standard local credentials if variables are not set).*
 
-### 3. Start the Backend
+#### 3. Start the Backend
 Navigate to the project root and run Spring Boot:
 ```powershell
 cd blood-donor-system
@@ -212,7 +235,7 @@ cd blood-donor-system
 ```
 The backend starts at `http://localhost:8080`.
 
-### 4. Start the Frontend
+#### 4. Start the Frontend
 In a separate terminal:
 ```powershell
 cd blood-donor-system/frontend

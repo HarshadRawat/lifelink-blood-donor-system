@@ -1,0 +1,20 @@
+# LifeLink Backend - Docker Ignore File
+target/
+*.jar
+*.war
+.git/
+.gitignore
+.idea/
+*.iml
+.mvn/
+mvnw
+mvnw.cmd
+frontend/
+node_modules/
+dist/
+logs/
+*.log
+.env
+.env.*
+.DS_Store
+Thumbs.db

@@ -1,0 +1,10 @@
+# LifeLink Root .dockerignore
+**/target/
+**/node_modules/
+**/dist/
+.git/
+.idea/
+*.log
+.env
+.env.local
+.env.*.local

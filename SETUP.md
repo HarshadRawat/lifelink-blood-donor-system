@@ -2,6 +2,9 @@
 
 This guide walks you through setting up and running **LifeLink** from scratch on a clean machine.
 
+> [!TIP]
+> **Prefer running with Docker?** You can skip manual JDK, Node.js, and MySQL installations entirely! Refer to [DOCKER.md](DOCKER.md) to run LifeLink using `docker compose up -d --build`.
+
 ---
 
 ## 1. Prerequisites & Version Requirements

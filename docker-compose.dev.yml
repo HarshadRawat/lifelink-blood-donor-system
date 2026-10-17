@@ -1,0 +1,31 @@
+# ====================================================================
+# LifeLink - Docker Compose Development Overlay (Hot Reloading)
+# ====================================================================
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# ====================================================================
+
+services:
+  backend:
+    environment:
+      JPA_SHOW_SQL: "true"
+      SECURITY_LOG_LEVEL: "DEBUG"
+
+  frontend:
+    # Overrides production Nginx container with Vite development server
+    build:
+      context: ./blood-donor-system/frontend
+      dockerfile_inline: |
+        FROM node:20-alpine
+        WORKDIR /app
+        COPY package.json package-lock.json ./
+        RUN npm install
+        COPY . .
+        EXPOSE 5173
+        CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./blood-donor-system/frontend/src:/app/src
+      - ./blood-donor-system/frontend/public:/app/public
+      - ./blood-donor-system/frontend/index.html:/app/index.html
