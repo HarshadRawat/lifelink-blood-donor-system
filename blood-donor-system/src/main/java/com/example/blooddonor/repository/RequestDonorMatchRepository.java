@@ -21,6 +21,8 @@ public interface RequestDonorMatchRepository
             MatchStatus status
     );
 
+    long countByStatus(MatchStatus status);
+
     List<RequestDonorMatch> findByDonor(DonorProfile donor);
     List<RequestDonorMatch> findByEmergencyRequest(
             EmergencyRequest emergencyRequest

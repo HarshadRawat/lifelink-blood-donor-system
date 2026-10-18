@@ -257,3 +257,39 @@ All protected endpoints require an HTTP `Authorization` header formatted as:
 * **Path**: `/api/notifications/unread-count`
 * **Access**: Authenticated user
 * **Response `200 OK`**: `{"unreadCount": 3}`
+
+---
+
+## 6. Administrative Oversight Endpoints
+
+*Note: All `/api/admin/**` endpoints are protected and require the `ROLE_ADMIN` authority. Public registration with role `ADMIN` is strictly rejected (`403 Forbidden`). An initial administrator account is automatically provisioned on startup (`admin@lifelink.com` / `Admin123`).*
+
+### Get Platform Metrics
+* **Method**: `GET`
+* **Path**: `/api/admin/metrics`
+* **Access**: `ROLE_ADMIN`
+* **Response `200 OK`**:
+```json
+{
+  "totalUsers": 25,
+  "totalDonors": 15,
+  "totalHospitals": 9,
+  "totalEmergencyRequests": 12,
+  "activeEmergencyRequests": 4,
+  "fulfilledEmergencyRequests": 8,
+  "completedDonations": 8
+}
+```
+
+### Get Recent Emergency Requests Across All Hospitals
+* **Method**: `GET`
+* **Path**: `/api/admin/requests?page=0&size=10`
+* **Access**: `ROLE_ADMIN`
+* **Response `200 OK`**: Paginated list of emergency request summaries.
+
+### Get Registered Platform Users
+* **Method**: `GET`
+* **Path**: `/api/admin/users?page=0&size=10`
+* **Access**: `ROLE_ADMIN`
+* **Response `200 OK`**: Paginated list of platform user summaries (`id`, `name`, `email`, `role`).
+

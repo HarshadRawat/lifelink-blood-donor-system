@@ -192,5 +192,24 @@ export const api = {
   test: {
     protected: () => request('/api/test/protected'),
     donorOnly: () => request('/api/test/donor-only'),
-  }
+  },
+
+  // --- ADMIN ---
+  admin: {
+    getMetrics: () => request('/api/admin/metrics'),
+    getRecentRequests: (params = {}) => {
+      const query = new URLSearchParams();
+      if (params.page !== undefined) query.append('page', params.page);
+      if (params.size !== undefined) query.append('size', params.size);
+      const queryString = query.toString() ? `?${query.toString()}` : '';
+      return request(`/api/admin/requests${queryString}`);
+    },
+    getUsers: (params = {}) => {
+      const query = new URLSearchParams();
+      if (params.page !== undefined) query.append('page', params.page);
+      if (params.size !== undefined) query.append('size', params.size);
+      const queryString = query.toString() ? `?${query.toString()}` : '';
+      return request(`/api/admin/users${queryString}`);
+    },
+  },
 };

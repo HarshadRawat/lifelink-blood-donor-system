@@ -78,7 +78,7 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 | :--- | :--- |
 | `ROLE_HOSPITAL` | Create/manage emergency blood requests, trigger donor matching, access contact details of accepted donors, mark donation fulfilled. |
 | `ROLE_DONOR` | Manage donor profile, toggle donation availability, receive real-time match alerts, accept/decline match with contact sharing consent. |
-| `ROLE_ADMIN` | System administrative oversight and platform monitoring. |
+| `ROLE_ADMIN` | System administrative oversight, platform KPI metrics, cross-hospital emergency request monitoring, and registered user directory (Default account: `admin@lifelink.com` / `Admin123`). |
 
 ---
 

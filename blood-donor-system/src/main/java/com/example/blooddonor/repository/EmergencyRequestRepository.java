@@ -2,6 +2,7 @@ package com.example.blooddonor.repository;
 
 import com.example.blooddonor.entity.EmergencyRequest;
 import com.example.blooddonor.entity.HospitalProfile;
+import com.example.blooddonor.entity.RequestStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,4 +16,6 @@ public interface EmergencyRequestRepository
             HospitalProfile hospital,
             Pageable pageable
     );
-}
+
+    long countByStatus(RequestStatus status);
+}
