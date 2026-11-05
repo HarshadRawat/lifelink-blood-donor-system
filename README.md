@@ -216,7 +216,7 @@ blood-donor-system/
 ## Prerequisites
 
 * **Java Development Kit (JDK)**: JDK 17 or higher
-* **Node.js**: v18.0.0 or higher (v20+ recommended)
+* **Node.js**: v20.0.0 or higher (v22+ LTS recommended)
 * **npm**: v9.0.0 or higher
 * **MySQL Server**: 8.0 or higher (or Docker)
 * **Ports**: `80` (Docker Gateway), `8080` (Backend API), and `5173` (Frontend Dev Server)
@@ -290,7 +290,7 @@ LifeLink includes an automated continuous integration and delivery pipeline defi
 ```mermaid
 flowchart LR
     A["Git Push / PR"] --> B["backend-ci\n(JDK 17 + Maven)"]
-    A --> C["frontend-ci\n(Node 20 + Vite)"]
+    A --> C["frontend-ci\n(Node 22 + Vite)"]
     B --> D["docker-validation\n(Compose + Buildx)"]
     C --> D
     

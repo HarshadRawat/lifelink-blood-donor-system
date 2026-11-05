@@ -45,17 +45,17 @@ jobs:
   # 2. Frontend Lint & Production Distribution Build
   # ------------------------------------------------------------------
   frontend-ci:
-    name: Frontend Lint & Build (Node 20 / Vite)
+    name: Frontend Lint & Build (Node 22 / Vite)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: blood-donor-system/frontend/package-lock.json
 
