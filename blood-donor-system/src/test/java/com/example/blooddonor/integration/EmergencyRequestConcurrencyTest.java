@@ -39,19 +39,17 @@ class EmergencyRequestConcurrencyTest {
         Long requestId = saved.getId();
         entityManager.clear();
 
-        // 2. Simulate User 1 loading the request
-        EmergencyRequest user1View = emergencyRequestRepository.findById(requestId).orElseThrow();
-
-        // 3. Simulate User 2 loading the request concurrently
-        entityManager.detach(user1View);
+        // 2. Simulate User 2 loading the request (stale snapshot with version 0)
         EmergencyRequest user2View = emergencyRequestRepository.findById(requestId).orElseThrow();
+        entityManager.detach(user2View); // Detach immediately so user2View retains version 0
 
-        // 4. User 1 updates units required and saves successfully (version increments from 0 to 1)
+        // 3. Simulate User 1 loading and modifying the request concurrently
+        EmergencyRequest user1View = emergencyRequestRepository.findById(requestId).orElseThrow();
         user1View.setUnitsRequired(2);
-        emergencyRequestRepository.saveAndFlush(user1View);
+        emergencyRequestRepository.saveAndFlush(user1View); // Increments version in DB from 0 to 1
         entityManager.clear();
 
-        // 5. User 2 attempts to save with stale version 0 -> throws ObjectOptimisticLockingFailureException
+        // 4. User 2 attempts to save with stale version 0 -> throws ObjectOptimisticLockingFailureException
         user2View.setStatus(RequestStatus.FULFILLED);
         assertThrows(ObjectOptimisticLockingFailureException.class, () -> {
             emergencyRequestRepository.saveAndFlush(user2View);

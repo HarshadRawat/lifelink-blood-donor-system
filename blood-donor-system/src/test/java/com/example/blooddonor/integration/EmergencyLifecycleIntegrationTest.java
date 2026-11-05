@@ -136,7 +136,7 @@ class EmergencyLifecycleIntegrationTest {
         // ====================================================================
         EmergencyRequestRequest bloodRequest = new EmergencyRequestRequest();
         bloodRequest.setBloodGroup("A+");
-        bloodRequest.setUnitsRequired(2);
+        bloodRequest.setUnitsRequired(1);
         bloodRequest.setUrgency(Urgency.CRITICAL);
 
         MvcResult reqResult = mockMvc.perform(post("/api/emergency-requests")
@@ -145,7 +145,7 @@ class EmergencyLifecycleIntegrationTest {
                         .content(objectMapper.writeValueAsString(bloodRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.bloodGroup").value("A+"))
-                .andExpect(jsonPath("$.unitsRequired").value(2))
+                .andExpect(jsonPath("$.unitsRequired").value(1))
                 .andExpect(jsonPath("$.urgency").value("CRITICAL"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andReturn();
@@ -181,7 +181,7 @@ class EmergencyLifecycleIntegrationTest {
         mockMvc.perform(get("/api/emergency-requests/" + requestId + "/matches/" + matchId + "/contact")
                         .header("Authorization", "Bearer " + hospToken))
                 .andExpect(status().isConflict()) // 409 Conflict: BusinessRuleException
-                .andExpect(jsonPath("$.message").value(containsString("Donor has not consented to share contact details")));
+                .andExpect(jsonPath("$.message").value(containsString("Contact details are only available for accepted donor matches")));
 
         // ====================================================================
         // STEP 6: Donor Alice Accepts Match with Contact Sharing Consent
@@ -211,22 +211,18 @@ class EmergencyLifecycleIntegrationTest {
                 .andExpect(jsonPath("$.status").value("ACCEPTED"));
 
         // ====================================================================
-        // STEP 8: Hospital Marks Match Completed & Request Fulfilled
+        // STEP 8: Hospital Marks Match Completed -> Request Automatically Fulfilled
         // ====================================================================
         mockMvc.perform(patch("/api/emergency-requests/matches/" + matchId + "/complete")
                         .header("Authorization", "Bearer " + hospToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
 
-        EmergencyRequestStatusRequest fulfillRequest = new EmergencyRequestStatusRequest();
-        fulfillRequest.setStatus(RequestStatus.FULFILLED);
-
-        mockMvc.perform(patch("/api/emergency-requests/" + requestId + "/status")
-                        .header("Authorization", "Bearer " + hospToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(fulfillRequest)))
+        // Verify Emergency Request was automatically transitioned to FULFILLED
+        mockMvc.perform(get("/api/emergency-requests")
+                        .header("Authorization", "Bearer " + hospToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("FULFILLED"));
+                .andExpect(jsonPath("$.content[0].status").value("FULFILLED"));
     }
 
     // --- Helper Methods ---
