@@ -45,9 +45,9 @@ EXPOSE 8080
 # Configure JVM container resource limits and entropy source
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
 
-# Container healthcheck using OpenAPI documentation endpoint
+# Container healthcheck using Spring Boot Actuator endpoint
 HEALTHCHECK --interval=20s --timeout=5s --start-period=35s --retries=5 \
-  CMD curl -f http://localhost:8080/v3/api-docs || exit 1
+  CMD curl -f http://localhost:8080/actuator/health || exit 1
 
 # Start Spring Boot application
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]

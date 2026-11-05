@@ -6,7 +6,8 @@
 [![Vite](https://img.shields.io/badge/Vite-8.3-646cff.svg)](https://vitejs.dev/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1.svg)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](DOCKER.md)
-[![Tests](https://img.shields.io/badge/Tests-132%20Passed-success.svg)](#testing)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF.svg?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-180%2B%20Automated%20Tests-success.svg)](#testing--quality-assurance)
 
 LifeLink is an emergency blood coordination platform built with Java Spring Boot and React. It bridges the critical latency gap between hospital blood shortages and nearby eligible donors using geolocation radius search, biological blood compatibility matrix matching, real-time push notifications over WebSockets, and privacy-first contact sharing.
 
@@ -22,13 +23,14 @@ LifeLink is an emergency blood coordination platform built with Java Spring Boot
 6. [Repository Structure](#repository-structure)
 7. [Prerequisites](#prerequisites)
 8. [Quick Start & Setup](#quick-start--setup)
-9. [Environment Configuration](#environment-configuration)
-10. [API & Swagger Documentation](#api--swagger-documentation)
-11. [Testing & Quality Assurance](#testing--quality-assurance)
-12. [Security & Privacy Design](#security--privacy-design)
-13. [Troubleshooting](#troubleshooting)
-14. [Contributing](#contributing)
-15. [License](#license)
+9. [CI/CD Pipeline (GitHub Actions)](#cicd-pipeline-github-actions)
+10. [Environment Configuration](#environment-configuration)
+11. [API, Swagger & Health Probes](#api-swagger--health-probes)
+12. [Testing & Quality Assurance](#testing--quality-assurance)
+13. [Security & Privacy Design](#security--privacy-design)
+14. [Troubleshooting](#troubleshooting)
+15. [Contributing](#contributing)
+16. [License](#license)
 
 ---
 
@@ -45,6 +47,7 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 * Medical **ABO/Rh compatibility matrix matching** ensuring accurate physiological compatibility.
 * **Sub-second push notifications** delivered via STOMP WebSockets directly to matching donors.
 * **Secure, consent-driven contact sharing**: Donor phone and email addresses remain masked until the donor explicitly accepts the request and grants consent to coordinate.
+* **Brute-force protection & sliding-window rate limiting**: Throttles credential guessing attempts on authentication endpoints.
 
 ---
 
@@ -52,7 +55,7 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 
 * **Hospital Emergency Request Portal**:
   * Broadcast emergency blood requests with blood type, units needed, and urgency level (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
-  * Automatic geolocation capture or manual coordinate positioning.
+  * Automatic browser geolocation capture or manual coordinate positioning.
   * Real-time tracking of matched donors and fulfillment status.
 * **Algorithmic Matching Engine**:
   * Distance calculation using the Haversine equation ($R = 6371\text{ km}$).
@@ -69,6 +72,9 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 * **Concurrency Control & Safety**:
   * Optimistic concurrency locking (`@Version`) preventing race conditions during concurrent request updates.
   * Spring Data JPA Specifications enabling composable multi-criteria dynamic filtering and database pagination (`LIMIT/OFFSET`).
+* **Production Observability & Resilience**:
+  * **Spring Boot Actuator**: Native `/actuator/health` liveness and readiness probes checking database connectivity in milliseconds.
+  * **Brute-Force Rate Limiting**: In-memory, thread-safe sliding-window filter (`10 requests / 60 seconds` per IP) returning HTTP 429 on abuse.
 
 ---
 
@@ -87,9 +93,10 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 ### Backend
 * **Language**: Java 17+
 * **Framework**: Spring Boot 4.1.1
-* **Security**: Spring Security 6, JJWT 0.12.6 (stateless HMAC-SHA JWT)
-* **Data Access**: Spring Data JPA, Hibernate, MySQL Connector/J
-* **Database**: MySQL 8.0+
+* **Security**: Spring Security 6, JJWT 0.12.6 (stateless HMAC-SHA JWT), Rate Limiting Filter
+* **Observability**: Spring Boot Starter Actuator (Liveness/Readiness probes)
+* **Data Access**: Spring Data JPA, Hibernate ORM 7, MySQL Connector/J
+* **Database**: MySQL 8.0+ (Production) / In-Memory H2 (Isolated Test Execution)
 * **Real-time**: Spring WebSocket, STOMP messaging broker (`SimpMessagingTemplate`)
 * **API Documentation**: SpringDoc OpenAPI 3.0.3 / Swagger UI
 * **Build Tool**: Maven 3.9+ (includes Maven Wrapper `mvnw`)
@@ -97,6 +104,7 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 ### Frontend
 * **Core**: React 19.2.8
 * **Build & Dev Tool**: Vite 8.3.4
+* **Testing**: Vitest 5.1.0, React Testing Library, `@testing-library/jest-dom`, JSDOM
 * **Routing**: React Router DOM 7.18.4
 * **Icons**: Lucide React 1.54.0
 * **WebSocket Client**: `@stomp/stompjs` 7.3.0
@@ -116,17 +124,26 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
                             │  HTTP REST / WebSocket STOMP
                             ▼
 ┌────────────────────────────────────────────────────────────────────────┐
+│                     Nginx Reverse Proxy (Port 80)                      │
+│      • Static asset caching  • REST API proxy  • WebSocket upgrade     │
+│      • /swagger-ui/ proxy   • /actuator/health container probes        │
+└───────────────────────────┬────────────────────────────────────────────┘
+                            │
+                            ▼
+┌────────────────────────────────────────────────────────────────────────┐
 │                 Spring Boot 4 Application Boundary                     │
 ├────────────────────────────────────────────────────────────────────────┤
-│  Security Layer:                                                       │
+│  Security & Guard Layer:                                               │
+│    • RateLimitingFilter (Sliding-window IP throttling for /api/auth/*) │
 │    • JwtFilter (Stateless Bearer token validation)                     │
 │    • WebSocketAuthInterceptor (CONNECT frame token verification)       │
-│    • Method Security (@PreAuthorize checks)                            │
+│    • Method Security (@PreAuthorize role guards)                       │
 ├────────────────────────────────────────────────────────────────────────┤
 │  Core Services:                                                        │
 │    • DonorMatchingService (Haversine equation & ABO/Rh matrix)         │
 │    • EmergencyRequestService (JPA Specifications & Version locking)    │
 │    • NotificationService (STOMP WebSocket push messaging)             │
+│    • Actuator Endpoint Service (/actuator/health)                      │
 ├────────────────────────────────────────────────────────────────────────┤
 │  Data Layer:                                                           │
 │    • Spring Data JPA Repositories                                      │
@@ -141,40 +158,57 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 
 ```
 blood-donor-system/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                   # GitHub Actions CI/CD Pipeline
 ├── blood-donor-system/              # Spring Boot Backend & React Frontend
 │   ├── frontend/                    # React 19 + Vite Application
 │   │   ├── src/
 │   │   │   ├── api/                 # API client & fetch interceptors
-│   │   │   ├── components/          # Reusable UI components & badges
+│   │   │   ├── components/          # Reusable UI components, Badges, Modals
 │   │   │   ├── context/             # AuthContext & NotificationContext (STOMP)
-│   │   │   ├── pages/               # Hospital, Donor, Auth, & Info pages
+│   │   │   ├── pages/               # Hospital, Donor, Admin, & Info dashboards
+│   │   │   ├── test/                # 50 Automated Vitest unit & component tests
+│   │   │   │   ├── AuthContext.test.jsx
+│   │   │   │   ├── Badges.test.jsx
+│   │   │   │   ├── DonorDashboard.test.jsx
+│   │   │   │   ├── HospitalDashboard.test.jsx
+│   │   │   │   ├── Modal.test.jsx
+│   │   │   │   ├── ProtectedRoute.test.jsx
+│   │   │   │   └── setup.js
 │   │   │   └── utils/               # Coordinate & request utilities
-│   │   ├── package.json             # Frontend dependencies
-│   │   ├── vite.config.js           # Vite dev proxy configuration
-│   │   └── .env.example             # Frontend environment example
+│   │   ├── Dockerfile               # Production multi-stage frontend Dockerfile
+│   │   ├── Dockerfile.dev           # Development hot-reload frontend Dockerfile
+│   │   ├── nginx.conf               # Production Nginx reverse proxy configuration
+│   │   ├── package.json             # Frontend dependencies & test scripts
+│   │   ├── vite.config.js           # Vite dev proxy & Vitest configuration
+│   │   └── eslint.config.js         # ESLint configuration
 │   ├── src/
 │   │   ├── main/java/com/example/blooddonor/
 │   │   │   ├── config/              # Security, OpenAPI, & WebSocket configuration
 │   │   │   ├── controller/          # REST Controllers
 │   │   │   ├── dto/                 # Request & Response Data Transfer Objects
 │   │   │   ├── entity/              # JPA Entities (Optimistic locking & Enums)
-│   │   │   ├── exception/           # Global exception handling & RFC errors
+│   │   │   ├── exception/           # Global exception handling
 │   │   │   ├── repository/          # Spring Data JPA Repositories & Specifications
-│   │   │   ├── security/            # JwtFilter implementation
+│   │   │   ├── security/            # JwtFilter & RateLimitingFilter
 │   │   │   └── service/             # Domain logic (Haversine, Matching, Notif)
-│   │   └── test/java/com/example/blooddonor/ # 132 automated test cases
+│   │   └── test/java/com/example/blooddonor/
+│   │       ├── controller/          # Controller slice tests
+│   │       ├── integration/         # Concurrency & Lifecycle integration tests
+│   │       ├── security/            # Security, JWT, Actuator & Rate limit tests
+│   │       └── service/             # Service unit tests
 │   ├── pom.xml                      # Maven project configuration
-│   ├── mvnw / mvnw.cmd              # Maven wrappers
-│   └── .gitignore
+│   └── mvnw / mvnw.cmd              # Maven wrappers
 ├── docs/                            # Deep Architecture & API Guides
 │   ├── ARCHITECTURE.md              # Detailed architecture breakdown
 │   ├── API.md                       # REST API endpoint reference
 │   └── SECURITY.md                  # Security model & privacy standards
+├── docker-compose.yml               # Production multi-service orchestration
+├── docker-compose.dev.yml           # Development live-reload overlay
 ├── .env.example                     # Root environment configuration template
 ├── .gitignore                       # Root Git ignore rules
-├── CONTRIBUTING.md                  # Development guidelines
-├── README.md                        # Project documentation
-└── SETUP.md                         # Clean machine setup guide
+└── README.md                        # Project documentation
 ```
 
 ---
@@ -184,14 +218,14 @@ blood-donor-system/
 * **Java Development Kit (JDK)**: JDK 17 or higher
 * **Node.js**: v18.0.0 or higher (v20+ recommended)
 * **npm**: v9.0.0 or higher
-* **MySQL Server**: 8.0 or higher
-* **Ports**: `8080` (Backend API) and `5173` (Frontend Dev Server)
+* **MySQL Server**: 8.0 or higher (or Docker)
+* **Ports**: `80` (Docker Gateway), `8080` (Backend API), and `5173` (Frontend Dev Server)
 
 ---
 
 ## Quick Start & Setup
 
-### Option 1: Run with Docker Compose (Recommended — Zero Host Setup)
+### Option 1: Run with Docker Compose (Recommended)
 
 Run the entire full-stack application (MySQL 8.0, Spring Boot backend, and React Nginx frontend) in isolated containers with a single command:
 
@@ -205,9 +239,13 @@ docker compose up -d --build
 
 * **Frontend Web Portal**: [http://localhost](http://localhost) (Port 80)
 * **Swagger UI API Docs**: [http://localhost/swagger-ui.html](http://localhost/swagger-ui.html)
+* **Backend Health Probe**: [http://localhost/actuator/health](http://localhost/actuator/health)
 * **Direct Backend API**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
 
-For in-depth Docker commands, live logs, volume backups, and custom port configuration, see the [Enterprise Docker Guide (DOCKER.md)](DOCKER.md).
+#### Development Live-Reload Mode:
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
 
 ---
 
@@ -220,12 +258,11 @@ CREATE DATABASE blood_donor_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode
 ```
 
 #### 2. Configure Environment
-Copy `.env.example` to `.env` or set your environment variables:
+Set environment variables or copy `.env.example`:
 ```powershell
 $env:DB_USERNAME="root"
 $env:DB_PASSWORD="your_mysql_password"
 ```
-*(By default, `application.properties` falls back to standard local credentials if variables are not set).*
 
 #### 3. Start the Backend
 Navigate to the project root and run Spring Boot:
@@ -246,6 +283,32 @@ Open **`http://localhost:5173`** in your browser.
 
 ---
 
+## CI/CD Pipeline (GitHub Actions)
+
+LifeLink includes an automated continuous integration and delivery pipeline defined in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The pipeline automatically triggers on pushes and pull requests to `main`, `master`, and `develop` branches:
+
+```mermaid
+flowchart LR
+    A["Git Push / PR"] --> B["backend-ci\n(JDK 17 + Maven)"]
+    A --> C["frontend-ci\n(Node 20 + Vite)"]
+    B --> D["docker-validation\n(Compose + Buildx)"]
+    C --> D
+    
+    subgraph B_details ["Backend CI"]
+      b1["Maven Cache"] --> b2["Unit & Integration Tests"] --> b3["Package Spring Boot JAR"]
+    end
+    
+    subgraph C_details ["Frontend CI"]
+      c1["npm ci"] --> c2["ESLint Check"] --> c3["50 Vitest Tests"] --> c4["Vite Production Build"]
+    end
+    
+    subgraph D_details ["Docker CI"]
+      d1["Validate compose configs"] --> d2["Multi-stage image builds"]
+    end
+```
+
+---
+
 ## Environment Configuration
 
 | Variable | Description | Default | Scope |
@@ -253,39 +316,67 @@ Open **`http://localhost:5173`** in your browser.
 | `PORT` | Backend server HTTP port | `8080` | Backend |
 | `DB_URL` | JDBC MySQL connection URL | `jdbc:mysql://localhost:3306/blood_donor_system` | Backend |
 | `DB_USERNAME` | MySQL database username | `root` | Backend |
-| `DB_PASSWORD` | MySQL database password | `your_mysql_password` (set via env) | Backend |
+| `DB_PASSWORD` | MySQL database password | `your_mysql_password` | Backend |
 | `JPA_DDL_AUTO` | Hibernate schema mode (`update`, `validate`, `none`) | `update` | Backend |
 | `JWT_SECRET` | 256/384-bit cryptographic signing key | Configured key | Backend |
 | `JWT_EXPIRATION_MS` | JWT validity in milliseconds | `86400000` (24h) | Backend |
-| `VITE_API_BASE_URL` | Frontend REST API base URL | Empty (uses Vite dev proxy) | Frontend |
+| `RATE_LIMIT_ENABLED` | Enable authentication endpoint rate limiting | `true` | Backend |
+| `RATE_LIMIT_LOGIN_MAX` | Max login/register attempts per IP window | `10` | Backend |
+| `RATE_LIMIT_LOGIN_WINDOW` | Sliding window duration in seconds | `60` | Backend |
+| `VITE_API_BASE_URL` | Frontend REST API base URL | Empty (uses proxy) | Frontend |
 
 ---
 
-## API & Swagger Documentation
+## API, Swagger & Health Probes
 
-When the backend is running, interactive OpenAPI 3 documentation is available at:
-* **Swagger UI**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
-* **OpenAPI JSON**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
+### Interactive API Documentation:
+* **Swagger UI (via Gateway)**: [http://localhost/swagger-ui.html](http://localhost/swagger-ui.html)
+* **Swagger UI (Direct)**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+* **OpenAPI 3 JSON**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 
-For a complete tabular list of endpoints, request bodies, and error codes, see [docs/API.md](docs/API.md).
+### Container Health & Observability:
+* **Actuator Health Check**: `GET http://localhost/actuator/health`
+  Returns `{"status": "UP"}` with active database connectivity verification.
+* **Frontend Gateway Probe**: `GET http://localhost/health`
+  Returns `200 OK` ("healthy").
 
 ---
 
 ## Testing & Quality Assurance
 
-LifeLink maintains a suite of **132 automated tests** covering controllers, services, repositories, security authorization, and WebSocket interceptors.
+### 1. Frontend Automated Tests (Vitest + React Testing Library)
+LifeLink maintains a full suite of **50 automated frontend tests** covering UI components, state contexts, authentication routing, and core user dashboards:
 
-Run the full test suite:
+```powershell
+cd blood-donor-system/frontend
+npm test
+```
+
+* `Badges.test.jsx` (13 tests): Badge status rendering, color variants, fallbacks.
+* `AuthContext.test.jsx` (5 tests): Login, logout, registration, session persistence.
+* `Modal.test.jsx` (4 tests): Portal rendering, escape key listener, backdrop dismissal.
+* `ProtectedRoute.test.jsx` (3 tests): Role guards, unauthenticated redirect.
+* `DonorDashboard.test.jsx` (12 tests): Incomplete profile prompt, availability toggle, emergency match list, consent disclosure modal, request decline.
+* `HospitalDashboard.test.jsx` (13 tests): Profile required guard, broadcast blood request form, algorithmic match trigger, request fulfillment, cancellation.
+
+Run linting and production bundle check:
+```powershell
+npm run lint    # ESLint verification (0 errors)
+npm run build   # Production asset compilation
+```
+
+### 2. Backend Automated Tests (JUnit 5 + Mockito + In-Memory H2)
+Covers controllers, services, repositories, security authorization, concurrency, and emergency lifecycle:
+
 ```powershell
 cd blood-donor-system
 .\mvnw.cmd test
 ```
 
-Build the frontend bundle:
-```powershell
-cd blood-donor-system/frontend
-npm run build
-```
+* `EmergencyRequestConcurrencyTest`: Tests JPA `@Version` optimistic locking against concurrent multi-threaded modifications.
+* `EmergencyLifecycleIntegrationTest`: Tests the complete 8-step lifecycle end-to-end (Hospital creation -> Donor registration -> Match trigger -> Privacy contact masking -> Donor consent -> Unlocked contact reveal -> Completion).
+* `RateLimitingFilterTest`: Verifies sliding-window IP throttling and HTTP 429 response enforcement.
+* `ActuatorSecurityTest`: Validates public health access and protection of sensitive internal metrics.
 
 ---
 
@@ -293,8 +384,9 @@ npm run build
 
 1. **Context-Derived Principals**: Authenticated user IDs are extracted directly from `SecurityContextHolder.getContext().getAuthentication().getPrincipal()`. The server never trusts client-supplied IDs.
 2. **Defensive PII Exposure**: Contact information (telephone numbers and emails) is masked at the service level and only revealed when the donor explicitly marks their match as `ACCEPTED` with consent.
-3. **IDOR Prevention**: Emergency request ownership checks verify that the requesting hospital owns the target request before permitting match or contact inspection.
-4. **Optimistic Locking**: JPA `@Version` on emergency requests prevents race conditions when concurrent users update blood request status or units.
+3. **Brute-Force & Credential Stuffing Defense**: `RateLimitingFilter` enforces a 10 req/min sliding-window limit per IP on `/api/auth/login` and `/api/auth/register` with `X-Forwarded-For` proxy resolution.
+4. **IDOR Prevention**: Emergency request ownership checks verify that the requesting hospital owns the target request before permitting match or contact inspection.
+5. **Optimistic Locking**: JPA `@Version` on emergency requests prevents race conditions when concurrent users update blood request status or units.
 
 For complete security specifications, see [docs/SECURITY.md](docs/SECURITY.md).
 
@@ -302,9 +394,10 @@ For complete security specifications, see [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Troubleshooting
 
-* **MySQL Connection Refused**: Verify that the MySQL service is running on port 3306 and that the `blood_donor_system` database has been created.
-* **Port 8080 or 5173 Already in Use**: Free the ports or pass `-Dserver.port=8081` / `--port 5174`.
-* **CORS Errors**: The Vite development server includes a built-in proxy in `vite.config.js` forwarding `/api` and `/ws` to `localhost:8080`, eliminating browser CORS issues in development.
+* **Swagger UI 404 on Assets**: Handled by Nginx `^~ /swagger-ui/` preferential prefix matching in `nginx.conf`.
+* **MySQL Connection Refused**: Verify MySQL is running on port 3306 (or 3307 in Docker) and database `blood_donor_system` exists.
+* **WebSocket Connection Blocked**: `WebSocketConfig` includes allowed origin patterns for `http://localhost`, `http://localhost:*`, `http://127.0.0.1:*`.
+* **Port Conflicts**: Pass custom ports via `.env` (`BACKEND_PORT=8081`, `FRONTEND_PORT=8080`, `MYSQL_PORT=3308`).
 
 ---
 
@@ -316,4 +409,4 @@ Please review [CONTRIBUTING.md](CONTRIBUTING.md) for details on code style, bran
 
 ## License
 
-This project is currently distributed for educational and assessment purposes. The repository owner should assign an appropriate open-source license (such as MIT or Apache 2.0) prior to public distribution.
+Distributed for educational and development purposes.

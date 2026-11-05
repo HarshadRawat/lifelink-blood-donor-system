@@ -64,7 +64,7 @@ export function RequestStatusBadge({ status }) {
  */
 export function MatchStatusBadge({ status }) {
   const statusUpper = (status || '').toUpperCase();
-  let badgeStyle = 'badge-matched';
+  let badgeStyle;
 
   switch (statusUpper) {
     case 'ACCEPTED':

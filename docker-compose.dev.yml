@@ -15,14 +15,7 @@ services:
     # Overrides production Nginx container with Vite development server
     build:
       context: ./blood-donor-system/frontend
-      dockerfile_inline: |
-        FROM node:20-alpine
-        WORKDIR /app
-        COPY package.json package-lock.json ./
-        RUN npm install
-        COPY . .
-        EXPOSE 5173
-        CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+      dockerfile: Dockerfile.dev
     ports:
       - "5173:5173"
     volumes:

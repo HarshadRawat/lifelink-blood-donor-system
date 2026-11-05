@@ -1,6 +1,7 @@
 package com.example.blooddonor.config;
 
 import com.example.blooddonor.security.JwtFilter;
+import com.example.blooddonor.security.RateLimitingFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -12,14 +13,18 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 
+import java.util.Optional;
+
 @EnableMethodSecurity
 @Configuration
 public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
+    private final Optional<RateLimitingFilter> rateLimitingFilter;
 
-    public SecurityConfig(JwtFilter jwtFilter) {
+    public SecurityConfig(JwtFilter jwtFilter, Optional<RateLimitingFilter> rateLimitingFilter) {
         this.jwtFilter = jwtFilter;
+        this.rateLimitingFilter = rateLimitingFilter;
     }
 
     @Bean
@@ -40,6 +45,9 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
+                                "/actuator/health/**",
+                                "/actuator/health",
+                                "/ws/**",
                                 "/ws"
                         ).permitAll()
                         .anyRequest().authenticated()
@@ -57,6 +65,10 @@ public class SecurityConfig {
                         jwtFilter,
                         UsernamePasswordAuthenticationFilter.class
                 );
+
+        rateLimitingFilter.ifPresent(filter ->
+                http.addFilterBefore(filter, JwtFilter.class)
+        );
 
         return http.build();
     }
