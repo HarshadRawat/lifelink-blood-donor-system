@@ -34,3 +34,12 @@ This document records the architectural, security, and infrastructure decisions 
 * **Alternatives Considered**: Mocking the repository layer exclusively; running all tests directly against a dedicated remote MySQL instance.
 * **Trade-Off**: H2 differs from MySQL 8 in locking semantics, index behavior, and specific SQL dialect nuances. This temporary trade-off is resolved in Task 3 where integration tests will migrate to real MySQL via Testcontainers.
 
+---
+
+### ADR 005: Code Coverage (JaCoCo), Container Image Registry (GHCR), and Automated Dependency Upgrades (Dependabot)
+* **Context & Decision**: Integrated the JaCoCo Maven plugin (`0.8.12`) into the build lifecycle with automated coverage artifact generation in CI, configured multi-stage Docker image builds published to GitHub Container Registry (`ghcr.io`) upon merges to `main`, and activated Dependabot for weekly ecosystem maintenance across Maven (`/blood-donor-system`), npm (`/blood-donor-system/frontend`), and GitHub Actions (`/`).
+* **Why**: Provides transparent and verifiable metrics on test quality (achieving 89.8% line coverage and 89.4% instruction coverage across the backend), automates immutable container delivery directly within GitHub's native ecosystem using repository-scoped tokens without external credentials, and proactively remediates dependency vulnerabilities and deprecations.
+* **Alternatives Considered**: Codecov/Coveralls for hosted coverage; Docker Hub for container image publishing; Renovate Bot for dependency management.
+* **Trade-Off**: Publishing images to GHCR requires strict lower-case repository and owner naming (sanitized dynamically via `$GITHUB_ENV` shell steps) and utilizes repository action runner minutes and package storage quotas.
+
+

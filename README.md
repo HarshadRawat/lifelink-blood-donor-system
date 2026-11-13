@@ -1,12 +1,14 @@
 # LifeLink — Blood Donor Emergency Response System
 
+[![CI](https://github.com/HarshadRawat/lifelink-blood-donor-system/actions/workflows/ci.yml/badge.svg)](https://github.com/HarshadRawat/lifelink-blood-donor-system/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/Coverage-89.8%25%20(JaCoCo)-brightgreen.svg)](blood-donor-system/target/site/jacoco/index.html)
 [![Java](https://img.shields.io/badge/Java-17%2B-blue.svg)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![React](https://img.shields.io/badge/React-19.2-61dafb.svg)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-8.3-646cff.svg)](https://vitejs.dev/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1.svg)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](DOCKER.md)
-[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF.svg?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
+[![GHCR](https://img.shields.io/badge/Container%20Registry-GHCR-blue.svg?logo=github)](https://github.com/HarshadRawat/lifelink-blood-donor-system/pkgs/container/lifelink-backend)
 [![Tests](https://img.shields.io/badge/Tests-199%20Passed-success.svg)](#testing--quality-assurance)
 
 LifeLink is an emergency blood coordination platform built with Java Spring Boot and React. It bridges the critical latency gap between hospital blood shortages and nearby eligible donors using geolocation radius search, biological blood compatibility matrix matching, real-time push notifications over WebSockets, and privacy-first contact sharing. Detailed architecture documentation is maintained in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and architectural decisions are tracked in [DECISIONS.md](DECISIONS.md).
@@ -289,13 +291,14 @@ LifeLink includes an automated continuous integration and delivery pipeline defi
 
 ```mermaid
 flowchart LR
-    A["Git Push / PR"] --> B["backend-ci\n(JDK 17 + Maven)"]
+    A["Git Push / PR"] --> B["backend-ci\n(JDK 17 + JaCoCo)"]
     A --> C["frontend-ci\n(Node 22 + Vite)"]
     B --> D["docker-validation\n(Compose + Buildx)"]
     C --> D
+    D --> E["publish (main push)\n(GHCR Images)"]
     
     subgraph B_details ["Backend CI"]
-      b1["Maven Cache"] --> b2["Unit & Integration Tests"] --> b3["Package Spring Boot JAR"]
+      b1["Maven Cache"] --> b2["149 Unit & Integration Tests"] --> b3["JaCoCo Coverage Artifact"] --> b4["Package JAR"]
     end
     
     subgraph C_details ["Frontend CI"]
@@ -305,7 +308,18 @@ flowchart LR
     subgraph D_details ["Docker CI"]
       d1["Validate compose configs"] --> d2["Multi-stage image builds"]
     end
+
+    subgraph E_details ["GHCR Delivery"]
+      e1["Login ghcr.io"] --> e2["Push lifelink-backend"] --> e3["Push lifelink-frontend"]
+    end
 ```
+
+### Pipeline Jobs Overview:
+1. **`backend-ci` (Java 17 / Maven)**: Runs the complete 149-test suite, executes JaCoCo code coverage analysis (generating HTML/XML/CSV reports uploaded as workflow artifacts), and packages the production executable JAR.
+2. **`frontend-ci` (Node 22 / Vite)**: Executes automated ESLint verification, 50 Vitest component tests, and builds optimized static assets.
+3. **`docker-validation` (Docker Compose & Buildx)**: Validates production and development Docker Compose configurations and verifies multi-stage Docker build files.
+4. **`publish` (GHCR Container Delivery)**: Runs exclusively on pushes/merges to `main`, publishing versioned and `latest` container images to GitHub Container Registry (`ghcr.io/harshadrawat/lifelink-backend` and `ghcr.io/harshadrawat/lifelink-frontend`).
+5. **Dependabot Automated Maintenance**: Configured via [`.github/dependabot.yml`](.github/dependabot.yml) to audit and update Maven backend dependencies, npm frontend packages, and GitHub Actions weekly.
 
 ---
 
