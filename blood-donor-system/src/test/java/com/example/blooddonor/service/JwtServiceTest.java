@@ -84,8 +84,10 @@ class JwtServiceTest {
         String token =
                 jwtService.generateToken(9L, "DONOR");
 
+        char lastChar = token.charAt(token.length() - 1);
+        char replacement = (lastChar == 'X') ? 'Y' : 'X';
         String tamperedToken =
-                token.substring(0, token.length() - 1) + "X";
+                token.substring(0, token.length() - 1) + replacement;
 
         assertFalse(
                 jwtService.isTokenValid(tamperedToken)

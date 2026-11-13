@@ -1,0 +1,37 @@
+# ====================================================================
+# LifeLink - Dependabot Automated Dependency Upgrades
+# ====================================================================
+# Ecosystems tracked:
+#   1. Maven (Java Backend)
+#   2. npm (React / Vite Frontend)
+#   3. GitHub Actions (CI/CD Workflows)
+# ====================================================================
+
+version: 2
+updates:
+  # Java Backend Dependencies (Maven)
+  - package-ecosystem: "maven"
+    directory: "/blood-donor-system"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Frontend Dependencies (npm)
+  - package-ecosystem: "npm"
+    directory: "/blood-donor-system/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+
+  # GitHub Actions CI Workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(ci)"
