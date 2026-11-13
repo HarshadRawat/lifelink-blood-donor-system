@@ -1,5 +1,6 @@
 package com.example.blooddonor.security;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,13 +12,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Thread-safe sliding-window rate limiting filter protecting authentication endpoints
  * against brute-force and credential stuffing attacks.
+ * Resists X-Forwarded-For spoofing by honoring headers only from trusted reverse proxies.
  */
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
@@ -31,15 +36,39 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     @Value("${security.rate-limit.login.window-seconds:60}")
     private long windowSeconds = 60;
 
+    @Value("${security.rate-limit.trusted-proxies:127.0.0.1,0:0:0:0:0:0:0:1,::1}")
+    private String trustedProxiesConfig = "127.0.0.1,0:0:0:0:0:0:0:1,::1";
+
+    private final Set<String> trustedProxies = new HashSet<>(Set.of("127.0.0.1", "0:0:0:0:0:0:0:1", "::1"));
+
     private final Map<String, WindowTracker> ipTrackers = new ConcurrentHashMap<>();
 
     public RateLimitingFilter() {
     }
 
     public RateLimitingFilter(boolean enabled, int maxRequests, long windowSeconds) {
+        this(enabled, maxRequests, windowSeconds, Set.of("127.0.0.1", "0:0:0:0:0:0:0:1", "::1"));
+    }
+
+    public RateLimitingFilter(boolean enabled, int maxRequests, long windowSeconds, Set<String> trustedProxies) {
         this.enabled = enabled;
         this.maxRequests = maxRequests;
         this.windowSeconds = windowSeconds;
+        this.trustedProxies.clear();
+        if (trustedProxies != null) {
+            this.trustedProxies.addAll(trustedProxies);
+        }
+    }
+
+    @PostConstruct
+    void initTrustedProxies() {
+        if (trustedProxiesConfig != null && !trustedProxiesConfig.isBlank()) {
+            trustedProxies.clear();
+            Arrays.stream(trustedProxiesConfig.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .forEach(trustedProxies::add);
+        }
     }
 
     @Override
@@ -84,12 +113,15 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String getClientIp(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            return xForwardedFor.split(",")[0].trim();
+    String getClientIp(HttpServletRequest request) {
+        String remote = request.getRemoteAddr() != null ? request.getRemoteAddr() : "unknown";
+        boolean fromTrustedProxy = trustedProxies.contains(remote);
+        String xff = request.getHeader("X-Forwarded-For");
+
+        if (fromTrustedProxy && xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
         }
-        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "unknown";
+        return remote;
     }
 
     public void reset() {

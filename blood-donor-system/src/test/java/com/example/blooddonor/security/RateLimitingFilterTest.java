@@ -165,5 +165,36 @@ class RateLimitingFilterTest {
 
         assertEquals(429, blockedRes.getStatus());
     }
+
+    @Test
+    @DisplayName("Untrusted caller cannot bypass rate limit by spoofing X-Forwarded-For header")
+    void untrustedCallerCannotSpoofXForwardedFor() throws ServletException, IOException {
+        FilterChain filterChain = mock(FilterChain.class);
+        String untrustedAttackerIp = "198.51.100.25";
+
+        // Attacker rotates fake X-Forwarded-For on every single attempt
+        for (int i = 1; i <= 5; i++) {
+            MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/auth/login");
+            req.setServletPath("/api/auth/login");
+            req.setRemoteAddr(untrustedAttackerIp); // Untrusted direct caller
+            req.addHeader("X-Forwarded-For", "1.2.3." + i); // Fake rotated IPs
+            MockHttpServletResponse res = new MockHttpServletResponse();
+
+            rateLimitingFilter.doFilter(req, res, filterChain);
+            assertEquals(200, res.getStatus());
+        }
+
+        // 6th attempt from the same untrusted IP must be BLOCKED, even with yet another spoofed IP
+        MockHttpServletRequest blockedReq = new MockHttpServletRequest("POST", "/api/auth/login");
+        blockedReq.setServletPath("/api/auth/login");
+        blockedReq.setRemoteAddr(untrustedAttackerIp);
+        blockedReq.addHeader("X-Forwarded-For", "1.2.3.99");
+        MockHttpServletResponse blockedRes = new MockHttpServletResponse();
+
+        rateLimitingFilter.doFilter(blockedReq, blockedRes, filterChain);
+
+        assertEquals(429, blockedRes.getStatus(), "Untrusted caller's remoteAddr must be throttled despite fake XFF headers");
+        verify(filterChain, times(5)).doFilter(any(), any());
+    }
 }
 

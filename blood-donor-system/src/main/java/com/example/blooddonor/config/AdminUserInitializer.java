@@ -5,6 +5,7 @@ import com.example.blooddonor.entity.User;
 import com.example.blooddonor.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,12 @@ public class AdminUserInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @Value("${app.admin.email:admin@lifelink.com}")
+    private String adminEmail;
+
+    @Value("${app.admin.password:Admin123}")
+    private String adminPassword;
+
     public AdminUserInitializer(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -27,12 +34,12 @@ public class AdminUserInitializer implements CommandLineRunner {
         if (!userRepository.existsByRole(Role.ADMIN)) {
             User admin = new User();
             admin.setName("LifeLink System Admin");
-            admin.setEmail("admin@lifelink.com");
-            admin.setPassword(passwordEncoder.encode("Admin123"));
+            admin.setEmail(adminEmail);
+            admin.setPassword(passwordEncoder.encode(adminPassword));
             admin.setRole(Role.ADMIN);
 
             userRepository.save(admin);
-            log.info("Initialized default administrative account: admin@lifelink.com (Password: Admin123)");
+            log.info("Initialized default administrative account: {}", adminEmail);
         }
     }
 }
