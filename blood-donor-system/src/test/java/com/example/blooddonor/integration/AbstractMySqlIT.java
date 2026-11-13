@@ -18,6 +18,7 @@ import org.testcontainers.mysql.MySQLContainer;
  */
 @Testcontainers(disabledWithoutDocker = true)
 @TestPropertySource(properties = {
+        "spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect",
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.flyway.enabled=true"
 })
