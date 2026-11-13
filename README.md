@@ -331,7 +331,9 @@ flowchart LR
 | `DB_URL` | JDBC MySQL connection URL | `jdbc:mysql://localhost:3306/blood_donor_system` | Backend |
 | `DB_USERNAME` | MySQL database username | `root` | Backend |
 | `DB_PASSWORD` | MySQL database password | `your_mysql_password` | Backend |
-| `JPA_DDL_AUTO` | Hibernate schema mode (`update`, `validate`, `none`) | `update` | Backend |
+| `JPA_DDL_AUTO` | Hibernate schema mode (`update`, `validate`, `none`) | `validate` | Backend |
+| `FLYWAY_ENABLED` | Enable Flyway database migrations | `true` | Backend |
+| `FLYWAY_BASELINE_ON_MIGRATE` | Baseline existing schema if not empty | `false` | Backend |
 | `JWT_SECRET` | 256/384-bit cryptographic signing key | Configured key | Backend |
 | `JWT_EXPIRATION_MS` | JWT validity in milliseconds | `86400000` (24h) | Backend |
 | `RATE_LIMIT_ENABLED` | Enable authentication endpoint rate limiting | `true` | Backend |

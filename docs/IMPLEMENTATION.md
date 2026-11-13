@@ -219,6 +219,16 @@ Built 50 automated tests using Vitest and React Testing Library:
 
 ---
 
+### 3.5 Database Versioning & Performance Query Indexing (Flyway)
+* **Engine**: Integrated Flyway (`spring-boot-starter-flyway` + `flyway-mysql`) to establish deterministic, versioned database migrations across development, testing, and production environments.
+* **Strict Production Schema Validation**: `spring.jpa.hibernate.ddl-auto=validate` replaces unchecked `ddl-auto=update`, ensuring Hibernate only validates that Java entity mappings match the database schema without mutating production DDL.
+* **Migration Scripts** (`src/main/resources/db/migration`):
+  - `V1__init.sql`: Sets up all 6 core tables (`users`, `donor_profiles`, `hospital_profiles`, `emergency_requests`, `request_donor_matches`, `notifications`) in strict parent-to-child dependency order with foreign keys and cascade rules.
+  - `V2__add_indexes.sql`: Introduces 7 composite and filtering indexes targeting critical hot paths (`idx_donor_blood_avail`, `idx_donor_lat_lng`, `idx_request_status`, `idx_match_request`, `idx_match_donor`, `idx_notifications_user_read`, `idx_notifications_created_at`).
+* **Empirical Index Proof**: Verified with MySQL 8 `EXPLAIN` query execution plans (documented in [`docs/INDEX_EXPLAIN_PLAN.md`](docs/INDEX_EXPLAIN_PLAN.md)), demonstrating conversion of full table scans (`ALL`) to fast reference lookups (`ref`) and range scans (`range`).
+
+---
+
 ## 4. DevOps, Docker Containerization & CI Pipeline
 
 ```mermaid

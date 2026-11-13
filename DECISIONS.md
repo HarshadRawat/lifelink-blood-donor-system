@@ -42,4 +42,13 @@ This document records the architectural, security, and infrastructure decisions 
 * **Alternatives Considered**: Codecov/Coveralls for hosted coverage; Docker Hub for container image publishing; Renovate Bot for dependency management.
 * **Trade-Off**: Publishing images to GHCR requires strict lower-case repository and owner naming (sanitized dynamically via `$GITHUB_ENV` shell steps) and utilizes repository action runner minutes and package storage quotas.
 
+---
+
+### ADR 006: Database Versioning (Flyway) and Strict Production Schema Validation
+* **Context & Decision**: Replaced automated Hibernate schema generation (`ddl-auto=update`) in production with explicit, versioned SQL migration scripts managed by Flyway (`V1__init.sql` for table DDL, `V2__add_indexes.sql` for query optimization composite indexes). Production runtime strictly enforces `spring.jpa.hibernate.ddl-auto=validate`.
+* **Why**: Automated schema evolution via Hibernate (`ddl-auto=update`) is hazardous for production systems: it cannot execute non-destructive column/table renames, cannot prune deprecated columns, executes outside developer source control, and risks silent schema drift across replica environments. Versioned SQL migrations guarantee deterministic, repeatable database state, provide an auditable immutable ledger in `flyway_schema_history`, and allow exact tuning of composite indexes (`idx_donor_blood_avail`, `idx_donor_lat_lng`, `idx_request_status`).
+* **Alternatives Considered**: Liquibase (XML/YAML/SQL changelogs); raw manual SQL scripts executed ad-hoc by operators; continuing with Hibernate DDL generation.
+* **Trade-Off**: Every database modification now requires authoring a new forward migration file (`V3`, `V4`...) following strict immutability rules. Applied migrations cannot be modified in-place without triggering Flyway checksum validation failures.
+
+
 
