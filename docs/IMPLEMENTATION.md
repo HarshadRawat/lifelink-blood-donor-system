@@ -243,10 +243,12 @@ flowchart LR
 ### 4.1 GitHub Actions CI Pipeline (`.github/workflows/ci.yml`)
 * **Triggers**: On every `push` and `pull_request` to `main`, `master`, and `develop`.
 * **Concurrency**: `cancel-in-progress: true` prevents wasted runner minutes.
-* **Three Parallel & Gated Jobs**:
+* **Four Parallel, Gated & Delivery Jobs**:
   1. `backend-ci` (Ubuntu Latest, JDK 17):
      * Caches Maven `.m2` repository dependencies.
      * Executes `./mvnw clean test` across all 149 tests.
+     * Measures code coverage via JaCoCo plugin (`0.8.12`) achieving **89.8% line coverage** and **89.4% instruction coverage**.
+     * Generates and uploads `jacoco-coverage-report` as a downloadable GitHub Actions artifact (`target/site/jacoco`).
      * Packages executable JAR via `./mvnw package -DskipTests`.
   2. `frontend-ci` (Ubuntu Latest, Node.js 22 LTS):
      * Caches npm packages.
@@ -259,6 +261,14 @@ flowchart LR
      * Validates production `docker-compose.yml` config.
      * Validates development `docker-compose.dev.yml` overlay.
      * Builds all Docker container images.
+  4. `publish` (Ubuntu Latest, depends on `[docker-validation]`, runs only on push to `main`):
+     * Authenticates with GitHub Container Registry (`ghcr.io`) using `GITHUB_TOKEN`.
+     * Dynamically computes lower-cased image prefix (`ghcr.io/harshadrawat`).
+     * Builds and publishes versioned and latest container images:
+       - `ghcr.io/harshadrawat/lifelink-backend:latest` and `:${{ github.sha }}`
+       - `ghcr.io/harshadrawat/lifelink-frontend:latest` and `:${{ github.sha }}`
+  5. **Dependabot Automated Upgrades (`.github/dependabot.yml`)**:
+     * Weekly automated dependency scans and PR creation across Maven (`/blood-donor-system`), npm (`/blood-donor-system/frontend`), and GitHub Actions (`/`).
 
 ### 4.2 Multi-Stage Docker Architecture
 * **Backend Dockerfile**:
@@ -285,7 +295,8 @@ flowchart LR
 | **Total Backend Tests** | **JUnit 5 / Maven** | **149** | **100%** | Zero failures, zero errors |
 | **Frontend Component & Unit** | Vitest + React Testing Library | **50** | **100%** | Badges, AuthContext, Modals, ProtectedRoutes, DonorDashboard, HospitalDashboard |
 | **Total Automated Tests** | **Full Stack** | **199** | **100%** | All automated tests passing |
-| **CI Pipeline Status** | **GitHub Actions** | **3 Jobs** | **100% GREEN** | Backend build/test, Frontend lint/test/build, Docker verification |
+| **Backend Code Coverage** | **JaCoCo 0.8.12** | **89.8% Lines / 89.4% Instructions** | **Artifact Uploaded** | 38 analyzed classes, HTML/XML/CSV reports generated |
+| **CI Pipeline Status** | **GitHub Actions** | **4 Jobs + Dependabot** | **100% GREEN** | Backend build/JaCoCo coverage, Frontend lint/test/build, Docker verification, GHCR publish |
 
 ---
 
