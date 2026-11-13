@@ -98,7 +98,7 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 * **Security**: Spring Security 6, JJWT 0.12.6 (stateless HMAC-SHA JWT), Rate Limiting Filter
 * **Observability**: Spring Boot Starter Actuator (Liveness/Readiness probes)
 * **Data Access**: Spring Data JPA, Hibernate ORM 7, MySQL Connector/J
-* **Database**: MySQL 8.0+ (Production) / In-Memory H2 (Isolated Test Execution)
+* **Database & Migrations**: MySQL 8.0+ (Production) / Flyway 12 Database Migrations / Testcontainers MySQL 8.0 (Integration Tests) / In-Memory H2 (Unit & Mock Tests)
 * **Real-time**: Spring WebSocket, STOMP messaging broker (`SimpMessagingTemplate`)
 * **API Documentation**: SpringDoc OpenAPI 3.0.3 / Swagger UI
 * **Build Tool**: Maven 3.9+ (includes Maven Wrapper `mvnw`)
@@ -386,7 +386,7 @@ npm run lint    # ESLint verification (0 errors)
 npm run build   # Production asset compilation
 ```
 
-### 2. Backend Automated Tests (JUnit 5 + Mockito + In-Memory H2)
+### 2. Backend Automated Tests (JUnit 5 + Mockito + Testcontainers MySQL 8 + In-Memory H2)
 **149 automated backend tests** covering controllers, services, repositories, security authorization, concurrency, and emergency lifecycle:
 
 ```powershell
@@ -394,12 +394,17 @@ cd blood-donor-system
 .\mvnw.cmd test
 ```
 
-* `RateLimitingFilterTest` (7 tests): Verifies sliding-window IP throttling, HTTP 429 response enforcement, reverse proxy header extraction, and spoofing resistance.
-* `EmergencyRequestConcurrencyTest` (1 test): Tests JPA `@Version` optimistic locking against concurrent multi-threaded modifications.
-* `EmergencyLifecycleIntegrationTest` (1 test): Tests the complete 8-step lifecycle end-to-end (Hospital creation -> Donor registration -> Match trigger -> Privacy contact masking -> Donor consent -> Unlocked contact reveal -> Completion).
-* `ActuatorSecurityTest` (2 tests): Validates public health access and protection of sensitive internal metrics.
-* `JwtFilterTest` & `JwtSecurityIntegrationTest` (11 tests): Token verification, expiration, malformed token handling, and role extraction.
-* Controller & Service Unit Tests (127 tests): Full coverage across donor, hospital, emergency request, notification, admin, and user management flows.
+* **Testcontainers MySQL 8.0 Integration (`AbstractMySqlIT`)**:
+  * Managed MySQL 8.0 container annotated with `@Testcontainers(disabledWithoutDocker = true)` for seamless local-to-CI portability.
+  * Dynamic JDBC configuration via Spring Boot `@ServiceConnection`.
+  * Real Flyway V1 and V2 migrations executed directly against the container with `spring.jpa.hibernate.ddl-auto=validate` to verify production schema fidelity.
+  * `EmergencyRequestConcurrencyTest` (1 test): Validates JPA `@Version` optimistic locking under concurrent updates against real MySQL InnoDB engine without H2 emulation. Configured with `@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)` to prevent embedded database substitution.
+  * `EmergencyLifecycleIntegrationTest` (1 test): Validates the complete 8-step emergency workflow end-to-end against real MySQL (Hospital registration -> Donor matching via Haversine & ABO -> Contact privacy masking -> Donor consent -> Revealed contact -> Fulfillment).
+* **Unit & Mock MVC Suites (Fast Inner-Loop Feedback)**:
+  * `RateLimitingFilterTest` (7 tests): Verifies sliding-window IP throttling, HTTP 429 response enforcement, reverse proxy header extraction, and spoofing resistance.
+  * `ActuatorSecurityTest` (2 tests): Validates public health access and protection of sensitive internal metrics.
+  * `JwtFilterTest` & `JwtSecurityIntegrationTest` (11 tests): Token verification, expiration, malformed token handling, and role extraction.
+  * Controller & Service Unit Tests (127 tests): Full Mockito coverage across donor, hospital, emergency request, notification, admin, and user management flows.
 
 ---
 

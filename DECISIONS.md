@@ -50,5 +50,19 @@ This document records the architectural, security, and infrastructure decisions 
 * **Alternatives Considered**: Liquibase (XML/YAML/SQL changelogs); raw manual SQL scripts executed ad-hoc by operators; continuing with Hibernate DDL generation.
 * **Trade-Off**: Every database modification now requires authoring a new forward migration file (`V3`, `V4`...) following strict immutability rules. Applied migrations cannot be modified in-place without triggering Flyway checksum validation failures.
 
+---
+
+### ADR 007: Test Database Strategy — Testcontainers MySQL 8.0 with Flyway Validation
+* **Context & Decision**: Migrated critical data persistence and integration test suites (`EmergencyLifecycleIntegrationTest` and `EmergencyRequestConcurrencyTest`) to execute against a real, containerized MySQL 8.0 database managed by Testcontainers (`AbstractMySqlIT`). Spring Boot's `@ServiceConnection` dynamically injects JDBC credentials and connection pooling directly into the application context. The base class configures `@Testcontainers(disabledWithoutDocker = true)` and sets `spring.jpa.hibernate.ddl-auto=validate` alongside `spring.flyway.enabled=true`. Fast isolated unit tests continue using Mockito without container overhead.
+* **Why**: An in-memory H2 database in MySQL mode exhibits key discrepancies when compared to production MySQL 8.0:
+  1. **Locking Semantics**: H2 does not execute identical concurrency semantics under parallel transactions. Running `@Version` optimistic locking tests against real MySQL guarantees that Hibernate correctly handles `ObjectOptimisticLockingFailureException` under InnoDB MVCC and row-level locking.
+  2. **Migration & Dialect Validation**: H2 does not strictly validate MySQL-specific Flyway DDL and index creation (such as InnoDB storage engine parameters, `DATETIME(6)`, `utf8mb4_unicode_ci` collations, and foreign key constraint cascading).
+  3. **Schema Parity**: Enforcing `ddl-auto=validate` against Flyway-migrated MySQL inside Testcontainers guarantees that any divergence between JPA entity mappings and SQL migrations is caught during build time before reaching production.
+* **Alternatives Considered**:
+  - Retaining H2 across all integration tests: Fails to detect engine-level lock contention and dialect-specific migration errors.
+  - Dedicated persistent external MySQL test instance: Prone to state leakage between test runs, concurrency collisions across parallel CI builds, and external network dependency failures.
+* **Trade-Off**: Spin-up time for the MySQL Docker container adds ~5-10 seconds of startup overhead on the first containerized test class in CI. Local environments lacking an active Docker daemon gracefully skip container-dependent tests via `disabledWithoutDocker = true`, preserving fast developer inner-loop feedback.
+
+
 
 

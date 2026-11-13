@@ -34,8 +34,8 @@ flowchart TD
     end
 
     subgraph DataLayer ["Data Persistence (Port 3307 / 3306)"]
-        MySQL[("MySQL 8.0 Database\n(Production & Container)")]
-        H2[("H2 In-Memory Database\n(Isolated Test Suites & CI)")]
+        MySQL[("MySQL 8.0 Database\n(Production & Testcontainers)")]
+        H2[("H2 In-Memory Database\n(Unit & Mock Suites)")]
     end
 
     Browser --> Nginx
@@ -47,7 +47,7 @@ flowchart TD
     Controllers --> Engines
     Engines --> JPA
     JPA --> MySQL
-    JPA -.->|Automated Tests| H2
+    JPA -.->|Unit Tests| H2
 ```
 
 ### Complete Technology Matrix
@@ -59,7 +59,7 @@ flowchart TD
 | **Security & Auth** | Spring Security + JJWT | 0.12.6 | Stateless JWT authentication & role-based authorization |
 | **Persistence / ORM** | Spring Data JPA / Hibernate | 7.4.5.Final | Object-relational mapping, repositories, optimistic locking |
 | **Database (Prod)** | MySQL Server | 8.0 | Relational database storage |
-| **Database (Test)** | H2 In-Memory Database | 2.4.240 | Zero-dependency isolated database for test suites & CI |
+| **Database (Test)** | Testcontainers MySQL 8.0 & H2 | MySQL 8.0 / H2 2.4 | Isolated MySQL 8 containers for integration tests; H2 for unit suites |
 | **Real-Time Push** | Spring WebSocket + STOMP | 4.1.1 | Event-driven push notifications to connected clients |
 | **Observability** | Spring Boot Actuator | 4.1.1 | Container healthchecks, liveness & readiness probes |
 | **API Documentation** | SpringDoc OpenAPI | 3.0.3 | Swagger UI specification & interactive exploration |
@@ -201,21 +201,26 @@ Built 50 automated tests using Vitest and React Testing Library:
 
 ---
 
-### 3.4 Integration & Concurrency Test Suite
-1. **`EmergencyRequestConcurrencyTest.java`**:
-   * Uses `@DataJpaTest` with isolated H2 in-memory DB.
-   * Detaches an entity snapshot at version 0, simulates a concurrent thread saving version 1, and verifies that saving the stale snapshot throws `ObjectOptimisticLockingFailureException`.
-2. **`EmergencyLifecycleIntegrationTest.java`**:
-   * End-to-end integration test spanning the complete platform flow:
-     - User registration & JWT generation for hospital and 3 donors.
-     - Profile creation with GPS coordinates (Alice within 2 km, Bob incompatible blood group, Charlie > 60 km away).
-     - Creation of emergency blood request.
-     - Matching engine execution: verifies only Alice matches (Haversine + ABO matrix).
-     - Privacy guard verification: hospital receives `409 Conflict` before consent.
-     - Donor acceptance with consent.
-     - Hospital views unlocked contact details.
-     - Hospital marks donation completed.
-     - System automatically marks emergency request as `FULFILLED`.
+### 3.4 Real Database Integration & Concurrency Test Suite (Testcontainers MySQL 8.0)
+To avoid false positives caused by dialect and locking discrepancies between in-memory H2 and production MySQL 8.0, critical integration and concurrency tests extend `AbstractMySqlIT`:
+* **`AbstractMySqlIT.java`**:
+  - Configures `@Testcontainers(disabledWithoutDocker = true)` for seamless local developer portability while running full containerized tests on Docker-enabled CI environments.
+  - Spawns a real `MySQLContainer("mysql:8.0")` with dynamic Spring Boot `@ServiceConnection` wiring (zero hardcoded JDBC credentials).
+  - Enforces `spring.jpa.hibernate.ddl-auto=validate` and `spring.flyway.enabled=true`, proving that all Flyway migrations (`V1`, `V2`) execute cleanly and match Hibernate entities.
+* **`EmergencyRequestConcurrencyTest.java`**:
+  - Configured with `@DataJpaTest` and `@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)` to prevent Spring Boot from substituting the container with embedded H2.
+  - Detaches an entity snapshot at version 0, simulates a concurrent transaction committing version 1, and verifies that committing the stale snapshot triggers an `ObjectOptimisticLockingFailureException` on the real InnoDB engine.
+* **`EmergencyLifecycleIntegrationTest.java`**:
+  - Executes full end-to-end integration flow across Spring MVC, Security, Services, JPA, and MySQL:
+    - User registration & JWT generation for hospital and 3 donors.
+    - Profile creation with GPS coordinates (Alice within 2 km, Bob incompatible blood group, Charlie > 60 km away).
+    - Creation of emergency blood request.
+    - Algorithmic matching engine execution: verifies only Alice matches (Haversine + ABO matrix) and STOMP WebSocket dispatch.
+    - Privacy guard verification: hospital receives `409 Conflict` before consent.
+    - Donor acceptance with consent.
+    - Hospital views unlocked contact details.
+    - Hospital marks donation completed.
+    - System automatically transitions emergency request to `FULFILLED`.
 
 ---
 
