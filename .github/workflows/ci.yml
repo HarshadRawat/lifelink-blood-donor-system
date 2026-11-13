@@ -135,7 +135,7 @@ jobs:
         run: echo "IMAGE_PREFIX=ghcr.io/$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Build and Push Backend Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./blood-donor-system
           push: true
@@ -144,7 +144,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/lifelink-backend:${{ github.sha }}
 
       - name: Build and Push Frontend Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./blood-donor-system/frontend
           push: true
