@@ -56,7 +56,9 @@ services:
       DB_URL: jdbc:mysql://mysql:3306/blood_donor_system?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       DB_USERNAME: root
       DB_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
-      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-validate}
+      FLYWAY_ENABLED: ${FLYWAY_ENABLED:-true}
+      FLYWAY_BASELINE_ON_MIGRATE: ${FLYWAY_BASELINE_ON_MIGRATE:-false}
       JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
       JWT_SECRET: ${JWT_SECRET:-blood_donor_super_secret_jwt_key_minimum_32_characters_long}
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
