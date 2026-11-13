@@ -33,3 +33,4 @@ This document records the architectural, security, and infrastructure decisions 
 * **Why**: Provides ultra-fast test execution in CI/CD (~25 seconds for the entire suite) without requiring a Docker daemon or external database during quick compile-test cycles.
 * **Alternatives Considered**: Mocking the repository layer exclusively; running all tests directly against a dedicated remote MySQL instance.
 * **Trade-Off**: H2 differs from MySQL 8 in locking semantics, index behavior, and specific SQL dialect nuances. This temporary trade-off is resolved in Task 3 where integration tests will migrate to real MySQL via Testcontainers.
+

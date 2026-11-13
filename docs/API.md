@@ -262,7 +262,7 @@ All protected endpoints require an HTTP `Authorization` header formatted as:
 
 ## 6. Administrative Oversight Endpoints
 
-*Note: All `/api/admin/**` endpoints are protected and require the `ROLE_ADMIN` authority. Public registration with role `ADMIN` is strictly rejected (`403 Forbidden`). An initial administrator account is automatically provisioned on startup (`admin@lifelink.com` / `Admin123`).*
+*Note: All `/api/admin/**` endpoints are protected and require the `ROLE_ADMIN` authority. Public registration with role `ADMIN` is strictly rejected (`403 Forbidden`). An initial administrator account can be configured via `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables (with dev defaults seeded for local testing).*
 
 ### Get Platform Metrics
 * **Method**: `GET`

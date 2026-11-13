@@ -50,7 +50,14 @@ Before submitting a Pull Request, all automated tests must pass with zero failur
 cd blood-donor-system
 .\mvnw.cmd test
 ```
-*Verify that all 132+ unit, security, and integration tests pass.*
+*Verify that all 149 unit, security, and integration tests pass.*
+
+### Frontend Test Suite
+```powershell
+cd blood-donor-system/frontend
+npm test
+```
+*Verify that all 50 component and unit tests pass.*
 
 ### Frontend Production Build
 ```powershell

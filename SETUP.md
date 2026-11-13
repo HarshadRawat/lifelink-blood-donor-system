@@ -77,10 +77,10 @@ Open a PowerShell terminal in the project directory:
 ```powershell
 cd d:\blood-donor-system\blood-donor-system
 
-# Run the full test suite (132 tests)
+# Run the full backend test suite (149 tests)
 .\mvnw.cmd test
 ```
-All 132 tests should pass with `BUILD SUCCESS`.
+All 149 tests should pass with `BUILD SUCCESS`.
 
 ### Step 3.3: Start the Backend Server
 ```powershell
