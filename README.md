@@ -7,9 +7,9 @@
 [![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1.svg)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](DOCKER.md)
 [![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF.svg?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-180%2B%20Automated%20Tests-success.svg)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/Tests-199%20Passed-success.svg)](#testing--quality-assurance)
 
-LifeLink is an emergency blood coordination platform built with Java Spring Boot and React. It bridges the critical latency gap between hospital blood shortages and nearby eligible donors using geolocation radius search, biological blood compatibility matrix matching, real-time push notifications over WebSockets, and privacy-first contact sharing.
+LifeLink is an emergency blood coordination platform built with Java Spring Boot and React. It bridges the critical latency gap between hospital blood shortages and nearby eligible donors using geolocation radius search, biological blood compatibility matrix matching, real-time push notifications over WebSockets, and privacy-first contact sharing. Detailed architecture documentation is maintained in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and architectural decisions are tracked in [DECISIONS.md](DECISIONS.md).
 
 ---
 
@@ -84,7 +84,7 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 | :--- | :--- |
 | `ROLE_HOSPITAL` | Create/manage emergency blood requests, trigger donor matching, access contact details of accepted donors, mark donation fulfilled. |
 | `ROLE_DONOR` | Manage donor profile, toggle donation availability, receive real-time match alerts, accept/decline match with contact sharing consent. |
-| `ROLE_ADMIN` | System administrative oversight, platform KPI metrics, cross-hospital emergency request monitoring, and registered user directory (Default account: `admin@lifelink.com` / `Admin123`). |
+| `ROLE_ADMIN` | System administrative oversight, platform KPI metrics, cross-hospital emergency request monitoring, and registered user directory (Initial seed account for local development: `admin@lifelink.com`, configurable via environment variables in production). |
 
 ---
 
@@ -323,6 +323,9 @@ flowchart LR
 | `RATE_LIMIT_ENABLED` | Enable authentication endpoint rate limiting | `true` | Backend |
 | `RATE_LIMIT_LOGIN_MAX` | Max login/register attempts per IP window | `10` | Backend |
 | `RATE_LIMIT_LOGIN_WINDOW` | Sliding window duration in seconds | `60` | Backend |
+| `RATE_LIMIT_TRUSTED_PROXIES` | Comma-separated trusted reverse proxy IPs | `127.0.0.1,0:0:0:0:0:0:0:1,::1` | Backend |
+| `ADMIN_EMAIL` | Default system administrator email | `admin@lifelink.com` | Backend |
+| `ADMIN_PASSWORD` | Default system administrator password | Configured secret | Backend |
 | `VITE_API_BASE_URL` | Frontend REST API base URL | Empty (uses proxy) | Frontend |
 
 ---
@@ -344,8 +347,10 @@ flowchart LR
 
 ## Testing & Quality Assurance
 
+LifeLink maintains a full suite of **199 automated tests** (149 backend tests across controllers, services, security, concurrency, and lifecycle integration + 50 frontend component tests):
+
 ### 1. Frontend Automated Tests (Vitest + React Testing Library)
-LifeLink maintains a full suite of **50 automated frontend tests** covering UI components, state contexts, authentication routing, and core user dashboards:
+A suite of **50 automated frontend tests** covering UI components, state contexts, authentication routing, and core user dashboards:
 
 ```powershell
 cd blood-donor-system/frontend
@@ -366,17 +371,19 @@ npm run build   # Production asset compilation
 ```
 
 ### 2. Backend Automated Tests (JUnit 5 + Mockito + In-Memory H2)
-Covers controllers, services, repositories, security authorization, concurrency, and emergency lifecycle:
+**149 automated backend tests** covering controllers, services, repositories, security authorization, concurrency, and emergency lifecycle:
 
 ```powershell
 cd blood-donor-system
 .\mvnw.cmd test
 ```
 
-* `EmergencyRequestConcurrencyTest`: Tests JPA `@Version` optimistic locking against concurrent multi-threaded modifications.
-* `EmergencyLifecycleIntegrationTest`: Tests the complete 8-step lifecycle end-to-end (Hospital creation -> Donor registration -> Match trigger -> Privacy contact masking -> Donor consent -> Unlocked contact reveal -> Completion).
-* `RateLimitingFilterTest`: Verifies sliding-window IP throttling and HTTP 429 response enforcement.
-* `ActuatorSecurityTest`: Validates public health access and protection of sensitive internal metrics.
+* `RateLimitingFilterTest` (7 tests): Verifies sliding-window IP throttling, HTTP 429 response enforcement, reverse proxy header extraction, and spoofing resistance.
+* `EmergencyRequestConcurrencyTest` (1 test): Tests JPA `@Version` optimistic locking against concurrent multi-threaded modifications.
+* `EmergencyLifecycleIntegrationTest` (1 test): Tests the complete 8-step lifecycle end-to-end (Hospital creation -> Donor registration -> Match trigger -> Privacy contact masking -> Donor consent -> Unlocked contact reveal -> Completion).
+* `ActuatorSecurityTest` (2 tests): Validates public health access and protection of sensitive internal metrics.
+* `JwtFilterTest` & `JwtSecurityIntegrationTest` (11 tests): Token verification, expiration, malformed token handling, and role extraction.
+* Controller & Service Unit Tests (127 tests): Full coverage across donor, hospital, emergency request, notification, admin, and user management flows.
 
 ---
 

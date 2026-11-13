@@ -1,13 +1,13 @@
-# LifeLink: Real-Time Emergency Blood Donation & Donor Response Platform
-## Complete Implementation Report & Technical Documentation
+# LifeLink: Emergency Blood Donation Coordination Platform
+## Technical Architecture & Implementation Documentation
 
 ---
 
 ### Executive Summary
 
-**LifeLink** is a mission-critical, full-stack healthcare coordination platform designed to bridge the life-saving gap between hospitals facing acute blood shortages and volunteer blood donors. By pairing real-time geospatial matching (Haversine formula within a 20 km radius) with strict biological ABO/Rh compatibility filtering, live WebSocket push notifications, and a privacy-by-design contact disclosure model, LifeLink dramatically minimizes the response time for emergency transfusions.
+**LifeLink** is a layered Spring Boot monolith designed to connect hospitals facing acute blood shortages with nearby eligible volunteer blood donors. By pairing 20 km geospatial matching (Haversine formula) with biological ABO/Rh compatibility filtering, live WebSocket push notifications, and a privacy-by-design contact disclosure model, LifeLink organizes and automates emergency response workflows.
 
-This document serves as the comprehensive implementation report detailing the entire platform architecture, core business engines, enterprise security features, automated test suites, DevOps containerization, and continuous integration/continuous delivery (CI/CD) pipelines.
+This document serves as the implementation reference detailing the platform architecture, core domain engines, security features, automated test suites, containerization, and continuous integration (CI) pipeline.
 
 ---
 
@@ -25,8 +25,8 @@ flowchart TD
         Nginx["Nginx 1.27 Alpine\nReverse Proxy & Static Web Server"]
     end
 
-    subgraph BackendLayer ["Backend Application Server (Port 8080)"]
-        Security["Spring Security 6 + JWT\nRateLimitingFilter (Sliding Window)"]
+    subgraph BackendLayer ["Backend Layer — Modular Monolith (Port 8080)"]
+        Security["Spring Security + JWT\nRateLimitingFilter (Sliding Window)"]
         Actuator["Spring Boot Actuator\n/actuator/health (Liveness/Readiness)"]
         Controllers["REST Controllers\nOpenAPI / Swagger Documentation"]
         Engines["Core Domain Engines\n* Haversine 20km Geolocation\n* ABO/Rh Compatibility Engine\n* Notification & WebSocket Broker"]
@@ -54,8 +54,8 @@ flowchart TD
 
 | Layer | Technology | Version | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Backend Framework** | Spring Boot | 4.1.1 (Spring 7) | Core microservice runtime & dependency injection |
-| **Language Runtime** | Java (JDK) | 17 LTS (Eclipse Temurin) | High-performance enterprise runtime |
+| **Backend Framework** | Spring Boot | 4.1.1 | Layered modular monolith runtime & dependency injection |
+| **Language Runtime** | Java (JDK) | 17 LTS (Eclipse Temurin) | Enterprise backend runtime |
 | **Security & Auth** | Spring Security + JJWT | 0.12.6 | Stateless JWT authentication & role-based authorization |
 | **Persistence / ORM** | Spring Data JPA / Hibernate | 7.4.5.Final | Object-relational mapping, repositories, optimistic locking |
 | **Database (Prod)** | MySQL Server | 8.0 | Relational database storage |
@@ -64,7 +64,7 @@ flowchart TD
 | **Observability** | Spring Boot Actuator | 4.1.1 | Container healthchecks, liveness & readiness probes |
 | **API Documentation** | SpringDoc OpenAPI | 3.0.3 | Swagger UI specification & interactive exploration |
 | **Frontend Framework** | React | 19.2.8 | Declarative single-page application |
-| **Build Tooling** | Vite | 8.3.4 | Ultra-fast ES-module bundling & dev server |
+| **Build Tooling** | Vite | 8.3.4 | ES-module bundling & dev server |
 | **Routing** | React Router DOM | 7.18.4 | Client-side routing with role-protected route guards |
 | **WebSocket Client** | @stomp/stompjs | 7.3.0 | STOMP client over SockJS/WebSockets |
 | **Frontend Testing** | Vitest + RTL | Vitest 5.1 / RTL 16.3 | Automated component & state unit testing |
@@ -94,12 +94,12 @@ The platform enforces three distinct personas secured by stateless JSON Web Toke
 3. **ADMIN**:
    * Platform-wide oversight: total registered users, donors, hospitals, active emergencies, and fulfilled matches.
    * Administrative registry of all hospital profiles and active requests.
-   * Pre-seeded administrative account (`admin@lifelink.com` / `Admin123`).
+   * Initial administrative account configurable via `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables (defaults seeded for local dev).
 
 ---
 
 ### 2.2 Geolocation Matching (Haversine Formula)
-To ensure blood reaches patients within the critical golden hour, donors must be physically located within **20 km** of the requesting hospital. The distance is calculated using the spherical law of haversines:
+Donors must be physically located within **20 km** of the requesting hospital to qualify. Distance is calculated using the spherical law of haversines:
 
 $$\Delta\sigma = 2 \arcsin \left( \sqrt{ \sin^2\left(\frac{\Delta\phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta\lambda}{2}\right) } \right)$$
 
@@ -111,7 +111,7 @@ $$d = R \cdot \Delta\sigma \quad (\text{where } R = 6{,}371\text{ km})$$
 ---
 
 ### 2.3 Strict Biological ABO / Rh Compatibility Matrix
-LifeLink models strict real-world immunohematology rules to prevent hemolytic transfusion reactions:
+LifeLink enforces standard immunohematology transfusion compatibility rules:
 
 | Patient / Request Blood Group | Compatible Donor Blood Groups | Universal Donor / Recipient Note |
 | :--- | :--- | :--- |
@@ -144,21 +144,20 @@ Donor contact details (phone number, email address) are high-sensitivity persona
   * `MATCH_REJECTED`: Sent to the hospital when a donor declines.
   * `REQUEST_CANCELLED`: Sent to matched donors when a hospital cancels a request.
   * `REQUEST_FULFILLED`: Sent to the hospital and participating donors when required units are reached.
-* In-app bell notification dropdown updates unread count badges instantly without page refreshes.
+* In-app notification bell updates unread count badges without page refreshes.
 
 ---
 
 ### 2.6 Concurrency Protection via Optimistic Locking
-To prevent race conditions where multiple coordinators or hospitals modify the same emergency request concurrently:
+To prevent race conditions where multiple coordinators modify the same emergency request concurrently:
 * `EmergencyRequest` entity utilizes `@Version private Long version;`.
 * Concurrent saves against stale entity snapshots trigger `ObjectOptimisticLockingFailureException`, preventing lost updates.
 
 ---
 
-## 3. Enterprise Hardening & New Additions
+## 3. Enterprise Hardening & Security Features
 
 ### 3.1 Spring Boot Actuator & Container Health Probes
-Production microservices require health verification for orchestrators (Kubernetes, Docker Swarm, Docker Compose):
 * **Dependency**: Integrated `spring-boot-starter-actuator`.
 * **Endpoints Exposed**: `/actuator/health` and `/actuator/info`.
 * **Configuration** (`application.properties`):
@@ -178,48 +177,27 @@ Production microservices require health verification for orchestrators (Kubernet
 
 ---
 
-### 3.2 Sliding-Window Rate Limiting & Brute-Force Defense
+### 3.2 Sliding-Window Rate Limiting & Spoofing Defense
 To defend authentication endpoints against credential stuffing and brute-force attacks:
 * **Filter**: Implemented `RateLimitingFilter.java` extending `OncePerRequestFilter`.
 * **Endpoints Throttled**: `/api/auth/login` and `/api/auth/register`.
-* **Rule**: 10 requests per rolling 60-second window per client IP.
-* **Reverse Proxy Support**: Extracts true client IP from `X-Forwarded-For` header with fallback to `request.getRemoteAddr()`.
-* **Memory Protection**: Implemented a thread-safe sliding window with self-cleaning eviction:
-  - Timestamp queue pruned on each request.
-  - LRU/size eviction ensures cache never exceeds 5,000 IP entries, preventing memory exhaustion attacks.
-* **HTTP 429 Response**: Rejects throttled requests with `429 Too Many Requests`, `Retry-After: 60`, and JSON error payload:
-  ```json
-  {"message": "Too many requests. Please wait before retrying."}
-  ```
-* **Unit Tests**: Built `RateLimitingFilterTest.java` (6 tests validating allow limits, IP isolation, window expiration, reverse proxy headers, and passthrough).
+* **Rule**: 10 requests per rolling 60-second window per client IP (configurable via properties).
+* **Anti-Spoofing Proxy Validation**: Inspects `X-Forwarded-For` only when the direct caller matches `security.rate-limit.trusted-proxies` (e.g. `127.0.0.1, ::1`). Untrusted direct callers cannot spoof client IPs.
+* **Memory Protection**: Sliding window with self-cleaning eviction:
+  - Cache size capped at 5,000 IP entries to protect against memory exhaustion.
+* **HTTP 429 Response**: Rejects throttled requests with `429 Too Many Requests`, `Retry-After: 60`, and JSON error payload.
+* **Unit Tests**: Covered by 7 tests in `RateLimitingFilterTest.java` validating limits, IP isolation, proxy header trust, and spoofing resistance.
 
 ---
 
 ### 3.3 Automated Frontend Test Suite (Vitest + RTL)
 Built 50 automated tests using Vitest and React Testing Library:
-1. **`Badges.test.jsx` (13 tests)**:
-   * Validates color semantics and rendering for `StatusBadge` (`ACTIVE`, `FULFILLED`, `CANCELLED`).
-   * Validates `UrgencyBadge` (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
-   * Validates `BloodGroupBadge` and `DonorLevelBadge` achievements.
-2. **`AuthContext.test.jsx` (5 tests)**:
-   * Validates token decoding, role parsing (`DONOR`, `HOSPITAL`, `ADMIN`), login state, logout cleanup, and session hydration from `localStorage`.
-3. **`Modal.test.jsx` (4 tests)**:
-   * Validates DOM portal mounting, backdrop clicks, Escape key dismiss, and close buttons.
-4. **`ProtectedRoute.test.jsx` (3 tests)**:
-   * Validates redirecting unauthenticated users to `/login`.
-   * Validates role authorization checks (e.g. blocking DONOR from HOSPITAL pages).
-   * Validates rendering children when authorized.
-5. **`DonorDashboard.test.jsx` (12 tests)**:
-   * Profile fetching, donor statistics, match list rendering.
-   * Emergency notification banners.
-   * Match acceptance flow with contact sharing checkbox.
-   * Match rejection flow.
-6. **`HospitalDashboard.test.jsx` (13 tests)**:
-   * Hospital profile prompt guard.
-   * Emergency request creation modal.
-   * Triggering matching engine.
-   * Donor contact fetching (with privacy disclosure checks).
-   * Marking donation completed.
+1. **`Badges.test.jsx` (13 tests)**: Status, urgency, blood group, and donor level badge rendering.
+2. **`AuthContext.test.jsx` (5 tests)**: Token decoding, role parsing (`DONOR`, `HOSPITAL`, `ADMIN`), login/logout, session hydration.
+3. **`Modal.test.jsx` (4 tests)**: Portal mounting, backdrop clicks, Escape key dismiss.
+4. **`ProtectedRoute.test.jsx` (3 tests)**: Unauthenticated redirects and role authorization guards.
+5. **`DonorDashboard.test.jsx` (12 tests)**: Profile fetch, stats, match acceptance with consent, rejection flow.
+6. **`HospitalDashboard.test.jsx` (13 tests)**: Request creation, matching engine calls, completion flow, contact view security.
 
 ---
 
@@ -228,12 +206,12 @@ Built 50 automated tests using Vitest and React Testing Library:
    * Uses `@DataJpaTest` with isolated H2 in-memory DB.
    * Detaches an entity snapshot at version 0, simulates a concurrent thread saving version 1, and verifies that saving the stale snapshot throws `ObjectOptimisticLockingFailureException`.
 2. **`EmergencyLifecycleIntegrationTest.java`**:
-   * Comprehensive end-to-end integration test spanning the complete platform flow:
+   * End-to-end integration test spanning the complete platform flow:
      - User registration & JWT generation for hospital and 3 donors.
-     - Profile creation with precise GPS coordinates (Alice within 2 km, Bob incompatible blood group, Charlie > 60 km away).
+     - Profile creation with GPS coordinates (Alice within 2 km, Bob incompatible blood group, Charlie > 60 km away).
      - Creation of emergency blood request.
-     - Execution of matching engine: verifies only Alice matches (Haversine + ABO matrix).
-     - Privacy guard verification: hospital receives `409 Conflict` if attempting to view Alice's contact before consent.
+     - Matching engine execution: verifies only Alice matches (Haversine + ABO matrix).
+     - Privacy guard verification: hospital receives `409 Conflict` before consent.
      - Donor acceptance with consent.
      - Hospital views unlocked contact details.
      - Hospital marks donation completed.
@@ -241,15 +219,15 @@ Built 50 automated tests using Vitest and React Testing Library:
 
 ---
 
-## 4. DevOps, Docker Containerization & CI/CD Pipeline
+## 4. DevOps, Docker Containerization & CI Pipeline
 
 ```mermaid
 flowchart LR
     Push["Git Push / PR\n(main branch)"] --> Jobs
 
-    subgraph Jobs ["GitHub Actions CI/CD Pipeline"]
+    subgraph Jobs ["GitHub Actions CI Pipeline"]
         direction TB
-        B_CI["backend-ci\n(JDK 17 + Maven)\n* 148 Tests (100% Pass)\n* Clean Packaging"]
+        B_CI["backend-ci\n(JDK 17 + Maven)\n* 149 Tests (100% Pass)\n* Clean Packaging"]
         F_CI["frontend-ci\n(Node 22 LTS + Vite)\n* ESLint Verification\n* 50 Vitest Tests (100% Pass)\n* Production Build"]
         D_VAL["docker-validation\n(Compose + Buildx)\n* Compose Config Linting\n* Multi-Stage Image Builds"]
     end
@@ -259,17 +237,17 @@ flowchart LR
     B_CI --> D_VAL
     F_CI --> D_VAL
 
-    D_VAL --> Deploy["Production Ready Artifacts\n* Docker Hub / Registry\n* Zero-Downtime Deployment"]
+    D_VAL --> Complete["Verified Container Images & Build Artifacts"]
 ```
 
-### 4.1 GitHub Actions CI/CD Pipeline (`.github/workflows/ci.yml`)
+### 4.1 GitHub Actions CI Pipeline (`.github/workflows/ci.yml`)
 * **Triggers**: On every `push` and `pull_request` to `main`, `master`, and `develop`.
 * **Concurrency**: `cancel-in-progress: true` prevents wasted runner minutes.
 * **Three Parallel & Gated Jobs**:
   1. `backend-ci` (Ubuntu Latest, JDK 17):
      * Caches Maven `.m2` repository dependencies.
-     * Executes `./mvnw clean test` across all 148 tests.
-     * Packages production executable JAR via `./mvnw package -DskipTests`.
+     * Executes `./mvnw clean test` across all 149 tests.
+     * Packages executable JAR via `./mvnw package -DskipTests`.
   2. `frontend-ci` (Ubuntu Latest, Node.js 22 LTS):
      * Caches npm packages.
      * Runs `npm ci`.
@@ -282,32 +260,32 @@ flowchart LR
      * Validates development `docker-compose.dev.yml` overlay.
      * Builds all Docker container images.
 
-### 4.2 Modern Web Stream Resolution (Node 22 LTS)
-During pipeline execution, Vitest utilizes `jsdom` which depends on `undici`. Undici requires `node:zlib.createZstdDecompress` (Zstandard decompression stream), introduced in Node.js 22.15+. We upgraded the CI runner and frontend Docker builder stages to **Node 22 LTS**, ensuring zero dependency crashes and modern web stream support.
-
-### 4.3 Multi-Stage Docker Architecture
+### 4.2 Multi-Stage Docker Architecture
 * **Backend Dockerfile**:
   - Stage 1: Maven packaging on Temurin 17.
   - Stage 2: Minimal Temurin 17 JRE Alpine runtime with non-root security user (`spring:spring`), memory limit flags, and curl-based healthcheck against `/actuator/health`.
 * **Frontend Dockerfile**:
   - Stage 1: Build production bundle using `node:22-alpine`.
-  - Stage 2: Serve static files with `nginx:1.27-alpine` containing custom reverse-proxy routing for `/api`, `/ws`, and `/actuator`.
+  - Stage 2: Serve static files with `nginx:1.27-alpine` containing reverse-proxy routing for `/api`, `/ws`, and `/actuator`.
 * **Docker Compose**:
   - Runs MySQL (`lifelink-mysql` on port 3307), Backend (`lifelink-backend` on port 8080), and Frontend (`lifelink-frontend` on port 80).
-  - Healthcheck dependency chain: Backend waits for MySQL to be healthy; Frontend waits for Backend to be healthy.
+  - Healthcheck dependency chain ensures ordered initialization.
 
 ---
 
 ## 5. Quality Assurance & Test Verification Summary
 
-| Test Domain | Test Framework | Test Count | Pass Rate | Execution Time | Key Coverage Areas |
-| :--- | :--- | :---: | :---: | :---: | :--- |
-| **Backend Unit & Controller** | JUnit 5 + Mockito + MockMvc | 146 | **100%** | ~14s | Auth, JWT, User, Hospital, Donor, Notification, Admin controllers and services |
-| **Backend Concurrency** | JUnit 5 + Spring Data JPA | 1 | **100%** | ~4s | `@Version` optimistic locking under concurrent updates |
-| **Backend Lifecycle E2E** | SpringBootTest + MockMvc | 1 | **100%** | ~9s | End-to-end emergency flow, Haversine exclusion, privacy guards, auto-fulfillment |
-| **Rate Limiter Defense** | JUnit 5 + Mockito | 6 | **100%** | <1s | Sliding-window IP throttling, proxy header extraction, cache boundary |
-| **Frontend Component & Unit** | Vitest + React Testing Library | 50 | **100%** | ~3s | Badges, AuthContext, Modals, ProtectedRoutes, DonorDashboard, HospitalDashboard |
-| **CI/CD Pipeline** | GitHub Actions | 3 Jobs | **100% GREEN** | ~1m 7s | Backend build/test, Frontend lint/test/build, Docker verification |
+| Test Domain | Test Framework | Test Count | Pass Rate | Key Coverage Areas |
+| :--- | :--- | :---: | :---: | :--- |
+| **Backend Controllers & Web Security** | JUnit 5 + MockMvc | 35 | **100%** | Admin, Auth, Donor, Hospital, EmergencyRequest, Notification Security |
+| **Backend Integration & Concurrency** | JUnit 5 + Spring Data JPA | 13 | **100%** | `@Version` optimistic locking, emergency request integration, lifecycle E2E |
+| **Backend Security, Filters & Actuator** | JUnit 5 + Mockito | 20 | **100%** | Actuator probes, JwtFilter, RateLimitingFilter (7 tests including anti-spoofing) |
+| **Backend Core Services** | JUnit 5 + Mockito | 80 | **100%** | DonorMatching (25 tests), DonorProfile, EmergencyRequest, Hospital, JWT, User |
+| **Application Context Boot** | SpringBootTest | 1 | **100%** | Context loading verification |
+| **Total Backend Tests** | **JUnit 5 / Maven** | **149** | **100%** | Zero failures, zero errors |
+| **Frontend Component & Unit** | Vitest + React Testing Library | **50** | **100%** | Badges, AuthContext, Modals, ProtectedRoutes, DonorDashboard, HospitalDashboard |
+| **Total Automated Tests** | **Full Stack** | **199** | **100%** | All automated tests passing |
+| **CI Pipeline Status** | **GitHub Actions** | **3 Jobs** | **100% GREEN** | Backend build/test, Frontend lint/test/build, Docker verification |
 
 ---
 
@@ -372,7 +350,7 @@ docker compose up --build
    Open `http://localhost:5173`.
 
 4. **Execute All Automated Tests**:
-   * Backend Tests (148 tests):
+   * Backend Tests (149 tests):
      ```bash
      cd blood-donor-system
      ./mvnw test

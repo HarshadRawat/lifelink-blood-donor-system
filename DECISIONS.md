@@ -1,0 +1,35 @@
+# LifeLink — Architecture Decision Records (ADR)
+
+This document records the architectural, security, and infrastructure decisions made in LifeLink. Each entry describes what was chosen, why it was chosen, alternatives considered, and the associated trade-offs.
+
+---
+
+### ADR 001: Architecture Style — Layered Spring Boot Monolith
+* **Context & Decision**: LifeLink is implemented as a single, modular, layered Spring Boot application (monolith) with distinct controller, service, repository, and security layers, rather than a distributed microservice topology.
+* **Why**: For a team of this size and the current operational requirements, a well-structured modular monolith provides unified transactional integrity, straightforward debugging, zero distributed network latency, and low deployment complexity.
+* **Alternatives Considered**: Microservices separated by bounded contexts (Auth Service, Matching Service, Notification Service) with an API gateway.
+* **Trade-Off**: Scaling individual hot paths independently is not possible without running multiple replicas of the whole backend behind a load balancer; this is addressed via containerized replicas and horizontal scaling planned in future tasks.
+
+---
+
+### ADR 002: Authentication Rate Limiting & NAT / Shared-IP Trade-Off
+* **Context & Decision**: An in-memory sliding-window `RateLimitingFilter` enforces a limit of 10 requests per 60 seconds per IP address on sensitive authentication endpoints (`/api/auth/login` and `/api/auth/register`). The limit is configurable via `security.rate-limit.login.max-requests` and `security.rate-limit.login.window-seconds`.
+* **Why**: Defends against automated credential-stuffing and brute-force password dictionary attacks with zero external infrastructure dependencies.
+* **Alternatives Considered**: Token bucket algorithm via Bucket4j/Redis; per-username lockout; captcha challenges.
+* **Trade-Off (NAT & Shared IPs)**: Users sharing a single public IP address (such as college hostels, corporate NATs, or shared mobile Wi-Fi) share the same rate-limiting quota. A burst of failed login attempts from one bad actor could temporarily throttle other legitimate users behind the same NAT. This trade-off is accepted for the initial monolith; per-user progressive delay and Redis-based rate limiting will be introduced in upcoming tasks.
+
+---
+
+### ADR 003: X-Forwarded-For Header Trust Boundary Against IP Spoofing
+* **Context & Decision**: `RateLimitingFilter` only trusts the `X-Forwarded-For` header if the direct socket caller (`request.getRemoteAddr()`) matches a configured set of trusted reverse proxies (`security.rate-limit.trusted-proxies`, defaulting to `127.0.0.1, ::1`). Direct clients connecting without an intermediate trusted proxy have their socket IP enforced directly.
+* **Why**: Without verifying the immediate caller, an external attacker could trivially send arbitrary `X-Forwarded-For` headers with rotating pseudo-random IPs to bypass rate-limiting entirely.
+* **Alternatives Considered**: Blindly reading the first comma-separated address in `X-Forwarded-For`; disabling reverse proxy header extraction completely.
+* **Trade-Off**: Requires explicitly configuring the reverse proxy IP / container subnet when deploying into multi-hop or cloud load balancer environments.
+
+---
+
+### ADR 004: Test Database Isolation — H2 vs. Testcontainers MySQL
+* **Context & Decision**: Automated CI unit and integration tests currently execute against an isolated, zero-dependency in-memory H2 database using MySQL compatibility mode (`MODE=MySQL`), while production runs on MySQL 8.0.
+* **Why**: Provides ultra-fast test execution in CI/CD (~25 seconds for the entire suite) without requiring a Docker daemon or external database during quick compile-test cycles.
+* **Alternatives Considered**: Mocking the repository layer exclusively; running all tests directly against a dedicated remote MySQL instance.
+* **Trade-Off**: H2 differs from MySQL 8 in locking semantics, index behavior, and specific SQL dialect nuances. This temporary trade-off is resolved in Task 3 where integration tests will migrate to real MySQL via Testcontainers.
