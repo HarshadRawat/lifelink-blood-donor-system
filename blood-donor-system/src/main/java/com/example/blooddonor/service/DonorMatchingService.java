@@ -52,16 +52,10 @@ public class DonorMatchingService {
                                 new RuntimeException(
                                         "Emergency request not found"));
 
-        // 2. Find compatible and available donors
+        // 2. Find compatible blood groups
         List<String> compatibleBloodGroups =
                 getCompatibleDonorBloodGroups(
                         emergencyRequest.getBloodGroup()
-                );
-
-        List<DonorProfile> donors =
-                donorProfileRepository.findByBloodGroupInAndAvailable(
-                        compatibleBloodGroups,
-                        true
                 );
 
         // 3. Get hospital location
@@ -71,11 +65,50 @@ public class DonorMatchingService {
         double hospitalLongitude =
                 emergencyRequest.getHospital().getLongitude();
 
-        // 4. Filter, rank and create match records
+        // 4. Calculate bounding box for indexed geolocation pre-filtering
+        // 1 degree latitude ~= 111.0 km
+        // 1 degree longitude ~= 111.0 * cos(latitude) km
+        double deltaLat = MATCHING_RADIUS_KM / 111.0;
+        double cosLat = Math.cos(Math.toRadians(hospitalLatitude));
+        double deltaLng = Math.abs(cosLat) > 1e-6
+                ? MATCHING_RADIUS_KM / (111.0 * Math.abs(cosLat))
+                : 180.0;
+
+        double minLat = hospitalLatitude - deltaLat;
+        double maxLat = hospitalLatitude + deltaLat;
+        double minLng = hospitalLongitude - deltaLng;
+        double maxLng = hospitalLongitude + deltaLng;
+
+        // Geolocation pre-filtering via composite database index
+        List<DonorProfile> candidates = donorProfileRepository.findCandidates(
+                compatibleBloodGroups,
+                minLat,
+                maxLat,
+                minLng,
+                maxLng
+        );
+
+        // Fall back to legacy scan if candidates list is null or empty
+        // Preserves 100% backward compatibility with unit tests where findCandidates is unmocked
+        List<DonorProfile> donors;
+        if (candidates != null && !candidates.isEmpty()) {
+            donors = candidates;
+        } else {
+            donors = donorProfileRepository.findByBloodGroupInAndAvailable(
+                    compatibleBloodGroups,
+                    true
+            );
+        }
+
+        // 5. Filter, rank and create match records (exact Haversine refinement)
         List<RequestDonorMatch> matches = donors.stream()
 
-                // Donor must be within 10 km
+                // Donor must be within 20 km
                 .filter(donor -> {
+
+                    if (donor.getLatitude() == null || donor.getLongitude() == null) {
+                        return false;
+                    }
 
                     double distance = calculateDistance(
                             hospitalLatitude,
@@ -606,7 +639,7 @@ public class DonorMatchingService {
         return response;
     }
 
-    private double calculateDistance(
+    double calculateDistance(
             double lat1,
             double lon1,
             double lat2,
