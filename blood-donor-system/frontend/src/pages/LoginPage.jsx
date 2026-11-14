@@ -133,6 +133,45 @@ export function LoginPage() {
           </button>
         </form>
 
+        {/* Quick Demo Credentials Panel for instant evaluation */}
+        <div className="demo-credentials-box mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-semibold text-slate-700 flex items-center gap-1">
+              ⚡ Quick Demo Logins
+            </span>
+            <span className="text-slate-400 text-[10px]">1-click autofill</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              type="button"
+              onClick={() => { setEmail('hospital@lifelink.com'); setPassword('Hospital123!'); }}
+              className="p-1.5 bg-white border border-slate-200 hover:border-red-300 hover:bg-red-50 rounded text-center transition cursor-pointer"
+              title="Hospital Coordinator in Bengaluru"
+            >
+              <div className="font-medium text-slate-800">🏥 Hospital</div>
+              <div className="text-[10px] text-slate-500">City Care</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEmail('alice.donor@lifelink.com'); setPassword('Donor123!'); }}
+              className="p-1.5 bg-white border border-slate-200 hover:border-red-300 hover:bg-red-50 rounded text-center transition cursor-pointer"
+              title="Eligible A+ Donor near Hospital (0.5 km)"
+            >
+              <div className="font-medium text-slate-800">🩸 Donor A+</div>
+              <div className="text-[10px] text-slate-500">Alice (0.5km)</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEmail('admin@lifelink.com'); setPassword('Admin123'); }}
+              className="p-1.5 bg-white border border-slate-200 hover:border-red-300 hover:bg-red-50 rounded text-center transition cursor-pointer"
+              title="LifeLink System Administrator"
+            >
+              <div className="font-medium text-slate-800">🛡️ Admin</div>
+              <div className="text-[10px] text-slate-500">System</div>
+            </button>
+          </div>
+        </div>
+
         <div className="auth-footer">
           <p>
             Don't have an account?{' '}
