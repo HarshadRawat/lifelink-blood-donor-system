@@ -40,7 +40,28 @@ services:
       - lifelink-network
 
   # ------------------------------------------------------------------
-  # 2. Spring Boot Backend Service (REST API & WebSockets)
+  # 2. Redis 7 In-Memory Cache & Rate Limiting Service
+  # ------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: lifelink-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - lifelink-network
+
+  # ------------------------------------------------------------------
+  # 3. Spring Boot Backend Service (REST API & WebSockets)
   # ------------------------------------------------------------------
   backend:
     build:
@@ -51,12 +72,16 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       PORT: 8080
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod,demo}
       DB_URL: jdbc:mysql://mysql:3306/blood_donor_system?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       DB_USERNAME: root
       DB_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       JPA_DDL_AUTO: ${JPA_DDL_AUTO:-validate}
       FLYWAY_ENABLED: ${FLYWAY_ENABLED:-true}
       FLYWAY_BASELINE_ON_MIGRATE: ${FLYWAY_BASELINE_ON_MIGRATE:-false}
@@ -108,6 +133,8 @@ services:
 volumes:
   mysql_data:
     name: lifelink_mysql_data
+  redis_data:
+    name: lifelink_redis_data
 
 # --------------------------------------------------------------------
 # Network Configuration
