@@ -6,6 +6,8 @@ import com.example.blooddonor.entity.HospitalProfile;
 import com.example.blooddonor.entity.User;
 import com.example.blooddonor.repository.HospitalProfileRepository;
 import com.example.blooddonor.repository.UserRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,6 +24,7 @@ public class HospitalProfileService {
         this.userRepository = userRepository;
     }
 
+    @CacheEvict(value = "hospital_profiles", key = "#userId")
     public HospitalProfileResponse createProfile(
             HospitalProfileRequest request,
             Long userId) {
@@ -69,6 +72,7 @@ public class HospitalProfileService {
         return response;
     }
 
+    @Cacheable(value = "hospital_profiles", key = "#userId")
     public HospitalProfileResponse getProfile(Long userId) {
 
         User user = userRepository.findById(userId)
@@ -98,6 +102,7 @@ public class HospitalProfileService {
         return response;
     }
 
+    @CacheEvict(value = "hospital_profiles", key = "#userId")
     public HospitalProfileResponse updateProfile(
             HospitalProfileRequest request,
             Long userId) {
