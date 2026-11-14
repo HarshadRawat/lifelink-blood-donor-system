@@ -5,13 +5,18 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
@@ -20,12 +25,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Thread-safe sliding-window rate limiting filter protecting authentication endpoints
+ * Thread-safe distributed rate limiting filter protecting authentication endpoints
  * against brute-force and credential stuffing attacks.
+ * Uses Redis atomic counters with TTL across multi-instance deployments,
+ * with graceful fallback to local in-memory sliding-window if Redis is unavailable.
  * Resists X-Forwarded-For spoofing by honoring headers only from trusted reverse proxies.
  */
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(RateLimitingFilter.class);
 
     @Value("${security.rate-limit.enabled:true}")
     private boolean enabled = true;
@@ -43,14 +52,21 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     private final Map<String, WindowTracker> ipTrackers = new ConcurrentHashMap<>();
 
+    @Autowired(required = false)
+    private StringRedisTemplate redisTemplate;
+
     public RateLimitingFilter() {
     }
 
     public RateLimitingFilter(boolean enabled, int maxRequests, long windowSeconds) {
-        this(enabled, maxRequests, windowSeconds, Set.of("127.0.0.1", "0:0:0:0:0:0:0:1", "::1"));
+        this(enabled, maxRequests, windowSeconds, Set.of("127.0.0.1", "0:0:0:0:0:0:0:1", "::1"), null);
     }
 
     public RateLimitingFilter(boolean enabled, int maxRequests, long windowSeconds, Set<String> trustedProxies) {
+        this(enabled, maxRequests, windowSeconds, trustedProxies, null);
+    }
+
+    public RateLimitingFilter(boolean enabled, int maxRequests, long windowSeconds, Set<String> trustedProxies, StringRedisTemplate redisTemplate) {
         this.enabled = enabled;
         this.maxRequests = maxRequests;
         this.windowSeconds = windowSeconds;
@@ -58,6 +74,16 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         if (trustedProxies != null) {
             this.trustedProxies.addAll(trustedProxies);
         }
+        this.redisTemplate = redisTemplate;
+    }
+
+    @Autowired(required = false)
+    public void setRedisTemplate(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    public StringRedisTemplate getRedisTemplate() {
+        return redisTemplate;
     }
 
     @PostConstruct
@@ -88,17 +114,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         // Protect login and registration from brute force attacks
         if ("POST".equalsIgnoreCase(method) && ("/api/auth/login".equals(path) || "/api/auth/register".equals(path))) {
             String clientIp = getClientIp(request);
-            long windowMillis = windowSeconds * 1000L;
+            boolean allowed = checkRateLimit(clientIp);
 
-            // Self-cleaning eviction if cache exceeds capacity threshold
-            if (ipTrackers.size() > 5000) {
-                long now = System.currentTimeMillis();
-                ipTrackers.entrySet().removeIf(entry -> now - entry.getValue().windowStartTime > windowMillis);
-            }
-
-            WindowTracker tracker = ipTrackers.computeIfAbsent(clientIp, k -> new WindowTracker());
-
-            if (!tracker.tryAcquire(maxRequests, windowMillis)) {
+            if (!allowed) {
                 response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.setHeader("Retry-After", String.valueOf(windowSeconds));
@@ -111,6 +129,36 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    boolean checkRateLimit(String clientIp) {
+        if (redisTemplate != null) {
+            try {
+                String key = "rl:login:" + clientIp;
+                Long count = redisTemplate.opsForValue().increment(key);
+                if (count != null && count == 1) {
+                    redisTemplate.expire(key, Duration.ofSeconds(windowSeconds));
+                }
+                return count != null && count <= maxRequests;
+            } catch (Exception ex) {
+                log.warn("Redis rate limiter unavailable ({}). Falling back to local in-memory rate limiting.", ex.getMessage());
+                return checkLocalRateLimit(clientIp);
+            }
+        }
+        return checkLocalRateLimit(clientIp);
+    }
+
+    boolean checkLocalRateLimit(String clientIp) {
+        long windowMillis = windowSeconds * 1000L;
+
+        // Self-cleaning eviction if cache exceeds capacity threshold
+        if (ipTrackers.size() > 5000) {
+            long now = System.currentTimeMillis();
+            ipTrackers.entrySet().removeIf(entry -> now - entry.getValue().windowStartTime > windowMillis);
+        }
+
+        WindowTracker tracker = ipTrackers.computeIfAbsent(clientIp, k -> new WindowTracker());
+        return tracker.tryAcquire(maxRequests, windowMillis);
     }
 
     String getClientIp(HttpServletRequest request) {
@@ -126,6 +174,16 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     public void reset() {
         ipTrackers.clear();
+        if (redisTemplate != null) {
+            try {
+                Set<String> keys = redisTemplate.keys("rl:login:*");
+                if (keys != null && !keys.isEmpty()) {
+                    redisTemplate.delete(keys);
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to reset Redis rate limit keys: {}", ex.getMessage());
+            }
+        }
     }
 
     static class WindowTracker {
