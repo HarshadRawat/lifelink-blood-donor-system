@@ -242,7 +242,7 @@ flowchart LR
 
     subgraph Jobs ["GitHub Actions CI Pipeline"]
         direction TB
-        B_CI["backend-ci\n(JDK 17 + Maven)\n* 149 Tests (100% Pass)\n* Clean Packaging"]
+        B_CI["backend-ci\n(JDK 17 + Maven)\n* 152 Tests (100% Pass)\n* Clean Packaging"]
         F_CI["frontend-ci\n(Node 22 LTS + Vite)\n* ESLint Verification\n* 50 Vitest Tests (100% Pass)\n* Production Build"]
         D_VAL["docker-validation\n(Compose + Buildx)\n* Compose Config Linting\n* Multi-Stage Image Builds"]
     end
@@ -261,7 +261,7 @@ flowchart LR
 * **Four Parallel, Gated & Delivery Jobs**:
   1. `backend-ci` (Ubuntu Latest, JDK 17):
      * Caches Maven `.m2` repository dependencies.
-     * Executes `./mvnw clean test` across all 149 tests.
+     * Executes `./mvnw clean test` across all 152 tests.
      * Measures code coverage via JaCoCo plugin (`0.8.12`) achieving **89.8% line coverage** and **89.4% instruction coverage**.
      * Generates and uploads `jacoco-coverage-report` as a downloadable GitHub Actions artifact (`target/site/jacoco`).
      * Packages executable JAR via `./mvnw package -DskipTests`.
@@ -296,6 +296,17 @@ flowchart LR
   - Runs MySQL (`lifelink-mysql` on port 3307), Backend (`lifelink-backend` on port 8080), and Frontend (`lifelink-frontend` on port 80).
   - Healthcheck dependency chain ensures ordered initialization.
 
+### 4.3 Live Cloud Deployment, Demo Seeding & CORS Architecture
+* **Live Deployment Guide**: Documented in [`docs/DEPLOYMENT.md`](DEPLOYMENT.md), supporting both single-host Cloud VM orchestration via Docker Compose & Nginx with Let's Encrypt SSL, and decoupled PaaS delivery (Render blueprint `render.yaml` for backend + Vercel SPA configuration `vercel.json`).
+* **Bangalore Demo Cluster Seeding (`DemoDataInitializer`)**:
+  - Activated conditionally via profile `demo` (`SPRING_PROFILES_ACTIVE=demo` or `prod,demo`) or `app.demo.seed=true` (`DEMO_SEED_ENABLED=true`).
+  - Idempotent: checks for existing hospital before seeding to ensure safe restarts.
+  - Seeds City Care Hospital (12.9352, 77.6245), 5 donors across Bangalore with distinct blood compatibility and distance tiers (including Alice at 0.5 km, Bob O- universal donor, and Emma at 60 km), an active `CRITICAL` A+ blood request with pre-computed matches, and unread notification alerts.
+* **CORS & WebSocket Origin Patterns**:
+  - Configured via `cors.allowed-origins` (`CORS_ALLOWED_ORIGINS`), securing cross-origin REST calls via `CorsConfigurationSource` in Spring Security and STOMP WebSocket connections via `setAllowedOriginPatterns` in `WebSocketConfig`.
+* **Sleep Prevention**:
+  - Configured UptimeRobot / Cron-job pings against `/actuator/health` every 5 minutes to keep free cloud host containers warm.
+
 ---
 
 ## 5. Quality Assurance & Test Verification Summary
@@ -303,14 +314,14 @@ flowchart LR
 | Test Domain | Test Framework | Test Count | Pass Rate | Key Coverage Areas |
 | :--- | :--- | :---: | :---: | :--- |
 | **Backend Controllers & Web Security** | JUnit 5 + MockMvc | 35 | **100%** | Admin, Auth, Donor, Hospital, EmergencyRequest, Notification Security |
-| **Backend Integration & Concurrency** | JUnit 5 + Spring Data JPA | 13 | **100%** | `@Version` optimistic locking, emergency request integration, lifecycle E2E |
+| **Backend Integration & Concurrency** | JUnit 5 + Spring Data JPA + Testcontainers | 13 | **100%** | `@Version` optimistic locking on MySQL 8, emergency request integration, lifecycle E2E |
 | **Backend Security, Filters & Actuator** | JUnit 5 + Mockito | 20 | **100%** | Actuator probes, JwtFilter, RateLimitingFilter (7 tests including anti-spoofing) |
-| **Backend Core Services** | JUnit 5 + Mockito | 80 | **100%** | DonorMatching (25 tests), DonorProfile, EmergencyRequest, Hospital, JWT, User |
+| **Backend Core Services & Config** | JUnit 5 + Mockito | 83 | **100%** | DonorMatching (25 tests), DemoDataInitializer (3 tests), DonorProfile, EmergencyRequest, Hospital, JWT, User |
 | **Application Context Boot** | SpringBootTest | 1 | **100%** | Context loading verification |
-| **Total Backend Tests** | **JUnit 5 / Maven** | **149** | **100%** | Zero failures, zero errors |
+| **Total Backend Tests** | **JUnit 5 / Maven** | **152** | **100%** | Zero failures, zero errors |
 | **Frontend Component & Unit** | Vitest + React Testing Library | **50** | **100%** | Badges, AuthContext, Modals, ProtectedRoutes, DonorDashboard, HospitalDashboard |
-| **Total Automated Tests** | **Full Stack** | **199** | **100%** | All automated tests passing |
-| **Backend Code Coverage** | **JaCoCo 0.8.12** | **89.8% Lines / 89.4% Instructions** | **Artifact Uploaded** | 38 analyzed classes, HTML/XML/CSV reports generated |
+| **Total Automated Tests** | **Full Stack** | **202** | **100%** | All automated tests passing |
+| **Backend Code Coverage** | **JaCoCo 0.8.12** | **89.8% Lines / 89.4% Instructions** | **Artifact Uploaded** | 39 analyzed classes, HTML/XML/CSV reports generated |
 | **CI Pipeline Status** | **GitHub Actions** | **4 Jobs + Dependabot** | **100% GREEN** | Backend build/JaCoCo coverage, Frontend lint/test/build, Docker verification, GHCR publish |
 
 ---

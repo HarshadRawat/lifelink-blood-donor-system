@@ -9,7 +9,7 @@
 [![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1.svg)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](DOCKER.md)
 [![GHCR](https://img.shields.io/badge/Container%20Registry-GHCR-blue.svg?logo=github)](https://github.com/HarshadRawat/lifelink-blood-donor-system/pkgs/container/lifelink-backend)
-[![Tests](https://img.shields.io/badge/Tests-199%20Passed-success.svg)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/Tests-202%20Passed-success.svg)](#testing--quality-assurance)
 
 LifeLink is an emergency blood coordination platform built with Java Spring Boot and React. It bridges the critical latency gap between hospital blood shortages and nearby eligible donors using geolocation radius search, biological blood compatibility matrix matching, real-time push notifications over WebSockets, and privacy-first contact sharing. Detailed architecture documentation is maintained in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and architectural decisions are tracked in [DECISIONS.md](DECISIONS.md).
 
@@ -87,6 +87,21 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 | `ROLE_HOSPITAL` | Create/manage emergency blood requests, trigger donor matching, access contact details of accepted donors, mark donation fulfilled. |
 | `ROLE_DONOR` | Manage donor profile, toggle donation availability, receive real-time match alerts, accept/decline match with contact sharing consent. |
 | `ROLE_ADMIN` | System administrative oversight, platform KPI metrics, cross-hospital emergency request monitoring, and registered user directory (Initial seed account for local development: `admin@lifelink.com`, configurable via environment variables in production). |
+
+---
+
+## Demo Logins & Instant Evaluation
+
+To evaluate LifeLink immediately without manual setup, the platform includes a pre-seeded Bengaluru test cluster (`SPRING_PROFILES_ACTIVE=demo` or `DEMO_SEED_ENABLED=true`). You can also click the **⚡ Quick Demo Logins** autofill buttons directly on the login screen:
+
+| Persona | Email | Password | Pre-seeded Scenario |
+| :--- | :--- | :--- | :--- |
+| 🏥 **Hospital** | `hospital@lifelink.com` | `Hospital123!` | **City Care Hospital** (Koramangala, Bengaluru). Has an active `CRITICAL` request for A+ blood. |
+| 🩸 **Donor (Compatible)** | `alice.donor@lifelink.com` | `Donor123!` | **Alice Sharma** (A+ blood, 0.5 km away). Matched to hospital request; test the consent & contact unlock flow. |
+| 🩸 **Donor (Universal)** | `bob.donor@lifelink.com` | `Donor123!` | **Bob Rao** (O- universal donor, 0.8 km away). Accepted request with contact sharing consent pre-granted. |
+| 🛡️ **Administrator** | `admin@lifelink.com` | `Admin123` | System admin dashboard showing platform-wide health metrics and user audit trail. |
+
+> Complete deployment architecture, cloud hosting instructions (VM, Render, Vercel), and SSL configuration are detailed in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ---
 
@@ -328,6 +343,7 @@ flowchart LR
 | Variable | Description | Default | Scope |
 | :--- | :--- | :--- | :--- |
 | `PORT` | Backend server HTTP port | `8080` | Backend |
+| `SPRING_PROFILES_ACTIVE` | Active Spring profiles (`prod`, `demo`, `dev`) | `default` | Backend |
 | `DB_URL` | JDBC MySQL connection URL | `jdbc:mysql://localhost:3306/blood_donor_system` | Backend |
 | `DB_USERNAME` | MySQL database username | `root` | Backend |
 | `DB_PASSWORD` | MySQL database password | `your_mysql_password` | Backend |
@@ -336,6 +352,8 @@ flowchart LR
 | `FLYWAY_BASELINE_ON_MIGRATE` | Baseline existing schema if not empty | `false` | Backend |
 | `JWT_SECRET` | 256/384-bit cryptographic signing key | Configured key | Backend |
 | `JWT_EXPIRATION_MS` | JWT validity in milliseconds | `86400000` (24h) | Backend |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated allowed CORS origins/patterns | `http://localhost,http://127.0.0.1` | Backend |
+| `DEMO_SEED_ENABLED` | Enable automatic Bangalore demo cluster seeding | `false` | Backend |
 | `RATE_LIMIT_ENABLED` | Enable authentication endpoint rate limiting | `true` | Backend |
 | `RATE_LIMIT_LOGIN_MAX` | Max login/register attempts per IP window | `10` | Backend |
 | `RATE_LIMIT_LOGIN_WINDOW` | Sliding window duration in seconds | `60` | Backend |
@@ -363,7 +381,7 @@ flowchart LR
 
 ## Testing & Quality Assurance
 
-LifeLink maintains a full suite of **199 automated tests** (149 backend tests across controllers, services, security, concurrency, and lifecycle integration + 50 frontend component tests):
+LifeLink maintains a full suite of **202 automated tests** (152 backend tests across controllers, services, security, concurrency, demo initialization, and lifecycle integration + 50 frontend component tests):
 
 ### 1. Frontend Automated Tests (Vitest + React Testing Library)
 A suite of **50 automated frontend tests** covering UI components, state contexts, authentication routing, and core user dashboards:
@@ -387,7 +405,7 @@ npm run build   # Production asset compilation
 ```
 
 ### 2. Backend Automated Tests (JUnit 5 + Mockito + Testcontainers MySQL 8 + In-Memory H2)
-**149 automated backend tests** covering controllers, services, repositories, security authorization, concurrency, and emergency lifecycle:
+**152 automated backend tests** covering controllers, services, repositories, security authorization, concurrency, demo seeding, and emergency lifecycle:
 
 ```powershell
 cd blood-donor-system
@@ -402,6 +420,7 @@ cd blood-donor-system
   * `EmergencyLifecycleIntegrationTest` (1 test): Validates the complete 8-step emergency workflow end-to-end against real MySQL (Hospital registration -> Donor matching via Haversine & ABO -> Contact privacy masking -> Donor consent -> Revealed contact -> Fulfillment).
 * **Unit & Mock MVC Suites (Fast Inner-Loop Feedback)**:
   * `RateLimitingFilterTest` (7 tests): Verifies sliding-window IP throttling, HTTP 429 response enforcement, reverse proxy header extraction, and spoofing resistance.
+  * `DemoDataInitializerTest` (3 tests): Verifies idempotent seeding of Bengaluru demo cluster and conditional profile activation.
   * `ActuatorSecurityTest` (2 tests): Validates public health access and protection of sensitive internal metrics.
   * `JwtFilterTest` & `JwtSecurityIntegrationTest` (11 tests): Token verification, expiration, malformed token handling, and role extraction.
   * Controller & Service Unit Tests (127 tests): Full Mockito coverage across donor, hospital, emergency request, notification, admin, and user management flows.

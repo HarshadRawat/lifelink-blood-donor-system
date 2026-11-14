@@ -63,6 +63,21 @@ This document records the architectural, security, and infrastructure decisions 
   - Dedicated persistent external MySQL test instance: Prone to state leakage between test runs, concurrency collisions across parallel CI builds, and external network dependency failures.
 * **Trade-Off**: Spin-up time for the MySQL Docker container adds ~5-10 seconds of startup overhead on the first containerized test class in CI. Local environments lacking an active Docker daemon gracefully skip container-dependent tests via `disabledWithoutDocker = true`, preserving fast developer inner-loop feedback.
 
+---
+
+### ADR 008: Deployment Topology, Demo Data Seeding, and CORS Strategy
+* **Context & Decision**: Designed a multi-target deployment strategy supporting both unified single-host Docker Compose deployment (behind Nginx with SSL) and decoupled PaaS delivery (Render for containerized backend + Vercel for frontend SPA). Implemented an idempotent `DemoDataInitializer` active strictly under the `demo` profile or `DEMO_SEED_ENABLED=true` that seeds a geographic cluster in Bengaluru (1 hospital, 5 donors with varying compatibility/distance, and 1 active request with matches). Configured configurable CORS via `cors.allowed-origins` (`CORS_ALLOWED_ORIGINS`) across both Spring Security (`CorsConfigurationSource`) and Spring WebSocket (`setAllowedOriginPatterns`).
+* **Why**:
+  1. A working live demonstration with pre-seeded data lets interviewers and recruiters evaluate the entire system (including geolocation calculations, ABO matrix, and WebSocket push alerts) in under 30 seconds without manually registering accounts or configuring coordinates.
+  2. Decoupled frontend (Vercel) and backend (Render) deployments trigger browser CORS pre-flight (`OPTIONS`) checks; without explicit CORS headers and allowed origin patterns, cross-origin REST calls and STOMP WebSocket handshakes fail.
+  3. Keeping demo data in an isolated Spring profile (`demo`) prevents test data pollution in production while ensuring automated CI builds (`backend-ci`) remain pristine.
+* **Alternatives Considered**:
+  - Hardcoding demo records directly in Flyway migration scripts (`V1__init.sql`): Violates production hygiene and pollutes real schemas.
+  - Allowing universal wildcard CORS (`*`) without credentials: Fails when authentication headers or credentials are sent, and violates security best practices.
+  - Requiring recruiters to manually register multiple accounts and enter GPS coordinates: Creates excessive friction and risks evaluator abandonment.
+* **Trade-Off**: Free cloud tiers (Render, Railway) enter sleep mode after 15 minutes of inactivity; mitigated by documenting UptimeRobot ping setup on `/actuator/health` to keep instances warm.
+
+
 
 
 
