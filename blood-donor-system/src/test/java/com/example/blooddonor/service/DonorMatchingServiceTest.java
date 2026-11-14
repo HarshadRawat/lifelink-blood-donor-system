@@ -20,6 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.Mockito.verify;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -1249,5 +1251,278 @@ public class DonorMatchingServiceTest {
                 "Cannot view contact details for a cancelled emergency request",
                 exception.getMessage()
         );
+    }
+
+    // =========================================================
+    // TEST #60
+    // Geolocation — Find candidates using indexed bounding-box query
+    // and rank nearest-first via exact Haversine refinement
+    // =========================================================
+
+    @Test
+    void shouldMatchDonorsUsingIndexedBoundingBoxCandidates() {
+
+        User hospitalUser = new User();
+        hospitalUser.setId(8L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(10L);
+        hospital.setUser(hospitalUser);
+        hospital.setLatitude(12.9716);
+        hospital.setLongitude(77.5946);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(50L);
+        request.setBloodGroup("A+");
+        request.setUnitsRequired(2);
+        request.setStatus(RequestStatus.ACTIVE);
+        request.setHospital(hospital);
+
+        // Donor 1: ~2 km away
+        User user1 = new User();
+        user1.setId(101L);
+        user1.setName("Close Donor");
+        DonorProfile donor1 = new DonorProfile();
+        donor1.setId(1L);
+        donor1.setUser(user1);
+        donor1.setBloodGroup("A+");
+        donor1.setAvailable(true);
+        donor1.setLatitude(12.9800);
+        donor1.setLongitude(77.6000);
+
+        // Donor 2: ~10 km away
+        User user2 = new User();
+        user2.setId(102L);
+        user2.setName("Medium Donor");
+        DonorProfile donor2 = new DonorProfile();
+        donor2.setId(2L);
+        donor2.setUser(user2);
+        donor2.setBloodGroup("O+");
+        donor2.setAvailable(true);
+        donor2.setLatitude(12.9000);
+        donor2.setLongitude(77.5500);
+
+        when(emergencyRequestRepository.findById(50L))
+                .thenReturn(Optional.of(request));
+
+        when(donorProfileRepository.findCandidates(
+                anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(List.of(donor2, donor1)); // returned unsorted from SQL
+
+        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, donor1))
+                .thenReturn(false);
+        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, donor2))
+                .thenReturn(false);
+
+        when(requestDonorMatchRepository.saveAll(anyList()))
+                .thenAnswer(invocation -> {
+                    List<RequestDonorMatch> matches = invocation.getArgument(0);
+                    long id = 1L;
+                    for (RequestDonorMatch m : matches) {
+                        m.setId(id++);
+                    }
+                    return matches;
+                });
+
+        List<RequestDonorMatchResponse> responses = donorMatchingService.findMatches(50L);
+
+        assertEquals(2, responses.size());
+        // Closest donor must be ranked first
+        assertEquals(1L, responses.get(0).getDonorId());
+        assertEquals("Close Donor", responses.get(0).getDonorName());
+        assertEquals(2L, responses.get(1).getDonorId());
+        assertEquals("Medium Donor", responses.get(1).getDonorName());
+
+        verify(donorProfileRepository).findCandidates(
+                anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()
+        );
+    }
+
+    // =========================================================
+    // TEST #61
+    // Geolocation — Candidate in bounding box corner exceeding
+    // the 20km circular radius must be excluded by Haversine refinement
+    // =========================================================
+
+    @Test
+    void shouldExcludeCandidateInBoundingBoxCornerExceedingCircularRadius() {
+
+        User hospitalUser = new User();
+        hospitalUser.setId(8L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setUser(hospitalUser);
+        hospital.setLatitude(12.9716);
+        hospital.setLongitude(77.5946);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(51L);
+        request.setBloodGroup("B+");
+        request.setStatus(RequestStatus.ACTIVE);
+        request.setHospital(hospital);
+
+        // Corner donor: inside lat/lng range of bounding box (~0.15 deg away on both axes),
+        // but Euclidean/Haversine distance is ~23.3 km > 20 km
+        User cornerUser = new User();
+        cornerUser.setId(103L);
+        cornerUser.setName("Corner Donor");
+        DonorProfile cornerDonor = new DonorProfile();
+        cornerDonor.setId(3L);
+        cornerDonor.setUser(cornerUser);
+        cornerDonor.setBloodGroup("B+");
+        cornerDonor.setAvailable(true);
+        cornerDonor.setLatitude(12.9716 + 0.15);
+        cornerDonor.setLongitude(77.5946 + 0.15);
+
+        when(emergencyRequestRepository.findById(51L))
+                .thenReturn(Optional.of(request));
+
+        // Database bounding box returns this candidate
+        when(donorProfileRepository.findCandidates(
+                anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(List.of(cornerDonor));
+
+        when(requestDonorMatchRepository.saveAll(anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<RequestDonorMatchResponse> responses = donorMatchingService.findMatches(51L);
+
+        // Must be rejected by Haversine refinement
+        assertTrue(responses.isEmpty(), "Candidate exceeding 20km circular radius must be filtered out");
+    }
+
+    // =========================================================
+    // TEST #62
+    // Geolocation — Boundary test: donor just inside 20km radius (19.8km)
+    // =========================================================
+
+    @Test
+    void shouldIncludeDonorJustInsideTwentyKilometerBoundary() {
+
+        User hospitalUser = new User();
+        hospitalUser.setId(8L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setUser(hospitalUser);
+        hospital.setLatitude(12.9716);
+        hospital.setLongitude(77.5946);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(52L);
+        request.setBloodGroup("O-");
+        request.setStatus(RequestStatus.ACTIVE);
+        request.setHospital(hospital);
+
+        // 19.8 km north (~0.178 degrees latitude)
+        User insideUser = new User();
+        insideUser.setId(104L);
+        insideUser.setName("Boundary Inside Donor");
+        DonorProfile insideDonor = new DonorProfile();
+        insideDonor.setId(4L);
+        insideDonor.setUser(insideUser);
+        insideDonor.setBloodGroup("O-");
+        insideDonor.setAvailable(true);
+        insideDonor.setLatitude(12.9716 + (19.8 / 111.195));
+        insideDonor.setLongitude(77.5946);
+
+        when(emergencyRequestRepository.findById(52L))
+                .thenReturn(Optional.of(request));
+
+        when(donorProfileRepository.findCandidates(
+                anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(List.of(insideDonor));
+
+        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, insideDonor))
+                .thenReturn(false);
+
+        when(requestDonorMatchRepository.saveAll(anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<RequestDonorMatchResponse> responses = donorMatchingService.findMatches(52L);
+
+        assertEquals(1, responses.size());
+        assertEquals("Boundary Inside Donor", responses.get(0).getDonorName());
+    }
+
+    // =========================================================
+    // TEST #63
+    // Geolocation — Boundary test: donor just outside 20km radius (20.2km)
+    // =========================================================
+
+    @Test
+    void shouldExcludeDonorJustOutsideTwentyKilometerBoundary() {
+
+        User hospitalUser = new User();
+        hospitalUser.setId(8L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setUser(hospitalUser);
+        hospital.setLatitude(12.9716);
+        hospital.setLongitude(77.5946);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(53L);
+        request.setBloodGroup("O-");
+        request.setStatus(RequestStatus.ACTIVE);
+        request.setHospital(hospital);
+
+        // 20.2 km north (~0.1816 degrees latitude)
+        User outsideUser = new User();
+        outsideUser.setId(105L);
+        outsideUser.setName("Boundary Outside Donor");
+        DonorProfile outsideDonor = new DonorProfile();
+        outsideDonor.setId(5L);
+        outsideDonor.setUser(outsideUser);
+        outsideDonor.setBloodGroup("O-");
+        outsideDonor.setAvailable(true);
+        outsideDonor.setLatitude(12.9716 + (20.2 / 111.195));
+        outsideDonor.setLongitude(77.5946);
+
+        when(emergencyRequestRepository.findById(53L))
+                .thenReturn(Optional.of(request));
+
+        when(donorProfileRepository.findCandidates(
+                anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(List.of(outsideDonor));
+
+        when(requestDonorMatchRepository.saveAll(anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<RequestDonorMatchResponse> responses = donorMatchingService.findMatches(53L);
+
+        assertTrue(responses.isEmpty(), "Donor beyond 20.0 km must not be matched");
+    }
+
+    // =========================================================
+    // TEST #64
+    // Geolocation — Direct Haversine calculation accuracy, symmetry, and zero distance
+    // =========================================================
+
+    @Test
+    void shouldCalculateHaversineDistanceAccuratelyAndSymmetrically() {
+
+        double bangaloreLat = 12.9716;
+        double bangaloreLng = 77.5946;
+        double whitefieldLat = 12.9698;
+        double whitefieldLng = 77.7499;
+
+        // 1. Same coordinates must yield 0.0 km
+        double zeroDist = donorMatchingService.calculateDistance(
+                bangaloreLat, bangaloreLng, bangaloreLat, bangaloreLng
+        );
+        assertEquals(0.0, zeroDist, 0.001);
+
+        // 2. Symmetry: dist(A, B) == dist(B, A)
+        double distForward = donorMatchingService.calculateDistance(
+                bangaloreLat, bangaloreLng, whitefieldLat, whitefieldLng
+        );
+        double distReverse = donorMatchingService.calculateDistance(
+                whitefieldLat, whitefieldLng, bangaloreLat, bangaloreLng
+        );
+        assertEquals(distForward, distReverse, 0.0001);
+
+        // 3. Known distance: Bangalore city center to Whitefield is ~16.8 km
+        assertTrue(distForward >= 16.5 && distForward <= 17.2,
+                "Distance should be approximately 16.8 km, got: " + distForward);
     }
 }
