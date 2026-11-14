@@ -26,6 +26,7 @@ import org.testcontainers.utility.DockerImageName;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -70,7 +71,9 @@ class HospitalProfileCacheIntegrationTest {
 
         // Atomically flush Redis test container state
         if (redisTemplate.getConnectionFactory() != null) {
-            redisTemplate.getConnectionFactory().getConnection().serverCommands().flushDb();
+            try (var conn = redisTemplate.getConnectionFactory().getConnection()) {
+                conn.serverCommands().flushDb();
+            }
         }
 
         // Create initial test user and hospital profile
@@ -106,9 +109,11 @@ class HospitalProfileCacheIntegrationTest {
         // Verify Redis cache contains the item
         Cache cache = cacheManager.getCache("hospital_profiles");
         assertNotNull(cache, "hospital_profiles cache must exist");
-        Cache.ValueWrapper wrapper = cache.get(userId);
-        assertNotNull(wrapper, "Value should be cached under key userId=" + userId);
-        assertNotNull(wrapper.get());
+        await().atMost(3, TimeUnit.SECONDS).untilAsserted(() -> {
+            Cache.ValueWrapper wrapper = cache.get(userId);
+            assertNotNull(wrapper, "Value should be cached under key userId=" + userId);
+            assertNotNull(wrapper.get());
+        });
 
         // Modify the database record directly behind Spring's back
         testProfile.setHospitalName("Direct DB Edit Should Not Be Seen");
@@ -121,13 +126,15 @@ class HospitalProfileCacheIntegrationTest {
                 "Subsequent read must be served from Redis cache, not the directly modified DB");
 
         // Verify Redis key TTL is configured (15 minutes = 900 seconds)
-        Set<String> keys = redisTemplate.keys("lifelink:cache:hospital_profiles::" + userId);
-        assertNotNull(keys);
-        assertFalse(keys.isEmpty(), "Redis cache key with prefix must exist");
-        String cacheKey = keys.iterator().next();
-        Long ttl = redisTemplate.getExpire(cacheKey, TimeUnit.SECONDS);
-        assertNotNull(ttl);
-        assertTrue(ttl > 0 && ttl <= 900, "TTL must be between 1 and 900 seconds, but was: " + ttl);
+        await().atMost(3, TimeUnit.SECONDS).untilAsserted(() -> {
+            Set<String> keys = redisTemplate.keys("lifelink:cache:hospital_profiles::" + userId);
+            assertNotNull(keys);
+            assertFalse(keys.isEmpty(), "Redis cache key with prefix must exist");
+            String cacheKey = keys.iterator().next();
+            Long ttl = redisTemplate.getExpire(cacheKey, TimeUnit.SECONDS);
+            assertNotNull(ttl);
+            assertTrue(ttl > 0 && ttl <= 900, "TTL must be between 1 and 900 seconds, but was: " + ttl);
+        });
     }
 
     @Test
@@ -141,7 +148,8 @@ class HospitalProfileCacheIntegrationTest {
 
         Cache cache = cacheManager.getCache("hospital_profiles");
         assertNotNull(cache);
-        assertNotNull(cache.get(userId), "Cache should be populated");
+        await().atMost(3, TimeUnit.SECONDS).untilAsserted(() ->
+                assertNotNull(cache.get(userId), "Cache should be populated"));
 
         // Update profile via service: triggers @CacheEvict
         HospitalProfileRequest updateRequest = new HospitalProfileRequest();
@@ -155,6 +163,10 @@ class HospitalProfileCacheIntegrationTest {
 
         HospitalProfileResponse updated = hospitalProfileService.updateProfile(updateRequest, userId);
         assertEquals("Apollo Super Specialty Hospital", updated.getHospitalName());
+
+        // Verify cache entry was evicted by @CacheEvict
+        await().atMost(3, TimeUnit.SECONDS).untilAsserted(() ->
+                assertNull(cache.get(userId), "Cache should be evicted"));
 
         // Next read should fetch fresh updated data from database and cache it
         HospitalProfileResponse fresh = hospitalProfileService.getProfile(userId);

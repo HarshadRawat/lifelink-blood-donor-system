@@ -37,6 +37,19 @@ jobs:
         run: ./mvnw clean test
         working-directory: blood-donor-system
 
+      - name: Print Surefire Reports on Failure
+        if: failure()
+        run: |
+          find target/surefire-reports -name "*.txt" -exec cat {} +
+        working-directory: blood-donor-system
+
+      - name: Upload Surefire Reports on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: blood-donor-system/target/surefire-reports/
+
       - name: Upload JaCoCo Coverage Report
         uses: actions/upload-artifact@v4
         with:
