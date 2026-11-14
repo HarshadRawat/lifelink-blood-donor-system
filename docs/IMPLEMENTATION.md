@@ -98,15 +98,23 @@ The platform enforces three distinct personas secured by stateless JSON Web Toke
 
 ---
 
-### 2.2 Geolocation Matching (Haversine Formula)
-Donors must be physically located within **20 km** of the requesting hospital to qualify. Distance is calculated using the spherical law of haversines:
+### 2.2 Two-Tier Geolocation Matching Engine
+To eliminate full in-memory table scans over enterprise datasets, LifeLink uses a high-performance **Two-Tier Geolocation Matching Architecture**:
 
-$$\Delta\sigma = 2 \arcsin \left( \sqrt{ \sin^2\left(\frac{\Delta\phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta\lambda}{2}\right) } \right)$$
+1. **Tier 1 — Bounding Box Database Pre-Filter ($\mathcal{O}(1)$ Math + Composite B-Tree Index)**:
+   Calculates a latitude/longitude bounding box circumscribing the 20.0 km radius:
+   $$\Delta\phi = \frac{r}{111.0\text{ km/deg}}, \quad \Delta\lambda = \frac{r}{111.0 \times \cos(\phi_{\text{hospital}})}$$
+   $$\phi \in [\phi_{\text{hospital}} - \Delta\phi, \; \phi_{\text{hospital}} + \Delta\phi], \quad \lambda \in [\lambda_{\text{hospital}} - \Delta\lambda, \; \lambda_{\text{hospital}} + \Delta\lambda]$$
+   Executes an indexed SQL query utilizing composite index `idx_donor_lat_lng` on `(latitude, longitude)` combined with `idx_donor_blood_avail` on `(blood_group, available)`. This pre-filter prunes 99.5% of non-qualifying records at the database engine level before data travels across the JDBC socket.
 
-$$d = R \cdot \Delta\sigma \quad (\text{where } R = 6{,}371\text{ km})$$
+2. **Tier 2 — Exact Spherical Haversine Refinement & Distance Ranking**:
+   Candidates retrieved from Tier 1 are refined in the JVM using the great-circle Haversine formula to eliminate corner candidates exceeding the circular 20.0 km radius:
+   $$\Delta\sigma = 2 \arcsin \left( \sqrt{ \sin^2\left(\frac{\Delta\phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta\lambda}{2}\right) } \right)$$
+   $$d = R \cdot \Delta\sigma \quad (\text{where } R = 6{,}371\text{ km})$$
+   * Qualified donors ($d \le 20.0\text{ km}$) are sorted nearest-first (`Comparator.comparingDouble(...)`).
+   * Fallback logic guarantees seamless execution if candidate queries return empty in legacy test mocks.
 
-* Any donor whose distance $d > 20.0\text{ km}$ is strictly excluded by the matching engine.
-* Inactive or unavailable donors (`available = false`) are automatically filtered out.
+*For complete 100,000-donor performance data, MySQL `EXPLAIN` query execution plans, and benchmarks, see [docs/BENCHMARK.md](docs/BENCHMARK.md).*
 
 ---
 

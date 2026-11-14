@@ -9,7 +9,8 @@
 [![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1.svg)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](DOCKER.md)
 [![GHCR](https://img.shields.io/badge/Container%20Registry-GHCR-blue.svg?logo=github)](https://github.com/HarshadRawat/lifelink-blood-donor-system/pkgs/container/lifelink-backend)
-[![Tests](https://img.shields.io/badge/Tests-202%20Passed-success.svg)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/Tests-207%20Passed-success.svg)](#testing--quality-assurance)
+[![Benchmark](https://img.shields.io/badge/100k%20Donors-12.5ms%20(9.3x%20faster)-brightgreen.svg)](docs/BENCHMARK.md)
 
 LifeLink is an emergency blood coordination platform built with Java Spring Boot and React. It bridges the critical latency gap between hospital blood shortages and nearby eligible donors using geolocation radius search, biological blood compatibility matrix matching, real-time push notifications over WebSockets, and privacy-first contact sharing. Detailed architecture documentation is maintained in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and architectural decisions are tracked in [DECISIONS.md](DECISIONS.md).
 
@@ -381,7 +382,7 @@ flowchart LR
 
 ## Testing & Quality Assurance
 
-LifeLink maintains a full suite of **202 automated tests** (152 backend tests across controllers, services, security, concurrency, demo initialization, and lifecycle integration + 50 frontend component tests):
+LifeLink maintains a full suite of **207 automated tests** (157 backend tests across controllers, services, security, concurrency, demo initialization, geolocation boundary conditions, and lifecycle integration + 50 frontend component tests):
 
 ### 1. Frontend Automated Tests (Vitest + React Testing Library)
 A suite of **50 automated frontend tests** covering UI components, state contexts, authentication routing, and core user dashboards:
@@ -405,13 +406,15 @@ npm run build   # Production asset compilation
 ```
 
 ### 2. Backend Automated Tests (JUnit 5 + Mockito + Testcontainers MySQL 8 + In-Memory H2)
-**152 automated backend tests** covering controllers, services, repositories, security authorization, concurrency, demo seeding, and emergency lifecycle:
+**157 automated backend tests** covering controllers, services, repositories, security authorization, concurrency, demo seeding, and emergency lifecycle:
 
 ```powershell
 cd blood-donor-system
 .\mvnw.cmd test
 ```
 
+* **Two-Tier Geolocation Matching & Boundary Tests (`DonorMatchingServiceTest` - 30 tests)**:
+  * Tests #60 to #64: Validates $\mathcal{O}(1)$ bounding-box candidate query (`findCandidates`), exact Haversine refinement ($\le 20.0\text{ km}$), nearest-first distance sorting, boundary conditions (19.8 km included vs. 20.2 km excluded), and corner-candidate elimination where donors inside the bounding box range but exceeding the 20 km circular radius are safely pruned.
 * **Testcontainers MySQL 8.0 Integration (`AbstractMySqlIT`)**:
   * Managed MySQL 8.0 container annotated with `@Testcontainers(disabledWithoutDocker = true)` for seamless local-to-CI portability.
   * Dynamic JDBC configuration via Spring Boot `@ServiceConnection`.
@@ -423,7 +426,18 @@ cd blood-donor-system
   * `DemoDataInitializerTest` (3 tests): Verifies idempotent seeding of Bengaluru demo cluster and conditional profile activation.
   * `ActuatorSecurityTest` (2 tests): Validates public health access and protection of sensitive internal metrics.
   * `JwtFilterTest` & `JwtSecurityIntegrationTest` (11 tests): Token verification, expiration, malformed token handling, and role extraction.
-  * Controller & Service Unit Tests (127 tests): Full Mockito coverage across donor, hospital, emergency request, notification, admin, and user management flows.
+  * Controller & Service Unit Tests (132 tests): Full Mockito coverage across donor, hospital, emergency request, notification, admin, and user management flows.
+
+### 3. 100,000 Donor Geolocation Benchmark Suite
+LifeLink includes a dedicated benchmark suite measuring matching latency on 100,000 synthetic donor records across MySQL 8.0:
+```powershell
+.\mvnw.cmd org.codehaus.mojo:exec-maven-plugin:3.7.0:java `
+  "-Dexec.mainClass=com.example.blooddonor.benchmark.DonorMatchingBenchmark" `
+  "-Dexec.classpathScope=test"
+```
+* **Performance Gain**: Cut median matching latency from **116.21 ms to 12.53 ms (9.3x speedup)** and 95th percentile latency from **188.78 ms to 21.35 ms (8.8x speedup)**.
+* **Memory Reduction**: Reduced candidate rows loaded into the JVM from **35,424 rows to 162 rows (99.5% reduction)**.
+* Detailed analysis, MySQL `EXPLAIN` query execution plans, and architectural trade-offs are documented in [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
 ---
 
