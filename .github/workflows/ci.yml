@@ -45,13 +45,13 @@ jobs:
 
       - name: Upload Surefire Reports on Failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: surefire-reports
           path: blood-donor-system/target/surefire-reports/
 
       - name: Upload JaCoCo Coverage Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jacoco-coverage-report
           path: blood-donor-system/target/site/jacoco/
