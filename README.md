@@ -9,7 +9,7 @@
 [![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1.svg)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](DOCKER.md)
 [![GHCR](https://img.shields.io/badge/Container%20Registry-GHCR-blue.svg?logo=github)](https://github.com/HarshadRawat/lifelink-blood-donor-system/pkgs/container/lifelink-backend)
-[![Tests](https://img.shields.io/badge/Tests-207%20Passed-success.svg)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/Tests-218%20Passed-success.svg)](#testing--quality-assurance)
 [![Benchmark](https://img.shields.io/badge/100k%20Donors-12.5ms%20(9.3x%20faster)-brightgreen.svg)](docs/BENCHMARK.md)
 
 LifeLink is an emergency blood coordination platform built with Java Spring Boot and React. It bridges the critical latency gap between hospital blood shortages and nearby eligible donors using geolocation radius search, biological blood compatibility matrix matching, real-time push notifications over WebSockets, and privacy-first contact sharing. Detailed architecture documentation is maintained in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and architectural decisions are tracked in [DECISIONS.md](DECISIONS.md).
@@ -115,6 +115,7 @@ To evaluate LifeLink immediately without manual setup, the platform includes a p
 * **Observability**: Spring Boot Starter Actuator (Liveness/Readiness probes)
 * **Data Access**: Spring Data JPA, Hibernate ORM 7, MySQL Connector/J
 * **Database & Migrations**: MySQL 8.0+ (Production) / Flyway 12 Database Migrations / Testcontainers MySQL 8.0 (Integration Tests) / In-Memory H2 (Unit & Mock Tests)
+* **Distributed Cache & Rate Limiting**: Redis 7 Alpine (Distributed rate limiter counters via atomic INCR+EXPIRE & hot path caching with resilient in-memory fallback)
 * **Real-time**: Spring WebSocket, STOMP messaging broker (`SimpMessagingTemplate`)
 * **API Documentation**: SpringDoc OpenAPI 3.0.3 / Swagger UI
 * **Build Tool**: Maven 3.9+ (includes Maven Wrapper `mvnw`)
@@ -348,6 +349,8 @@ flowchart LR
 | `DB_URL` | JDBC MySQL connection URL | `jdbc:mysql://localhost:3306/blood_donor_system` | Backend |
 | `DB_USERNAME` | MySQL database username | `root` | Backend |
 | `DB_PASSWORD` | MySQL database password | `your_mysql_password` | Backend |
+| `REDIS_HOST` | Redis cache and rate limiting hostname | `localhost` (Compose: `redis`) | Backend |
+| `REDIS_PORT` | Redis cache and rate limiting port | `6379` | Backend |
 | `JPA_DDL_AUTO` | Hibernate schema mode (`update`, `validate`, `none`) | `validate` | Backend |
 | `FLYWAY_ENABLED` | Enable Flyway database migrations | `true` | Backend |
 | `FLYWAY_BASELINE_ON_MIGRATE` | Baseline existing schema if not empty | `false` | Backend |

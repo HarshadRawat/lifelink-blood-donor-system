@@ -26,15 +26,17 @@ flowchart TD
     end
 
     subgraph BackendLayer ["Backend Layer — Modular Monolith (Port 8080)"]
-        Security["Spring Security + JWT\nRateLimitingFilter (Sliding Window)"]
+        Security["Spring Security + JWT\nRateLimitingFilter (Distributed Redis & Local Fallback)"]
         Actuator["Spring Boot Actuator\n/actuator/health (Liveness/Readiness)"]
         Controllers["REST Controllers\nOpenAPI / Swagger Documentation"]
         Engines["Core Domain Engines\n* Haversine 20km Geolocation\n* ABO/Rh Compatibility Engine\n* Notification & WebSocket Broker"]
+        Caching["Spring Cache Abstraction\n(RedisCacheManager + JSON Serialization)"]
         JPA["Spring Data JPA + Hibernate\nOptimistic Locking (@Version)"]
     end
 
-    subgraph DataLayer ["Data Persistence (Port 3307 / 3306)"]
+    subgraph DataLayer ["Data Persistence & Caching"]
         MySQL[("MySQL 8.0 Database\n(Production & Testcontainers)")]
+        Redis[("Redis 7 Alpine\n(Rate Limiting & Hot Path Cache)")]
         H2[("H2 In-Memory Database\n(Unit & Mock Suites)")]
     end
 
@@ -44,7 +46,10 @@ flowchart TD
     Nginx -->|/ws/* (WebSocket Proxy)| Engines
     Nginx -->|/actuator/* (Health Proxy)| Actuator
     Security --> Controllers
+    Security -->|Distributed Counter| Redis
     Controllers --> Engines
+    Controllers --> Caching
+    Caching -->|Key-Value Store| Redis
     Engines --> JPA
     JPA --> MySQL
     JPA -.->|Unit Tests| H2
@@ -59,6 +64,7 @@ flowchart TD
 | **Security & Auth** | Spring Security + JJWT | 0.12.6 | Stateless JWT authentication & role-based authorization |
 | **Persistence / ORM** | Spring Data JPA / Hibernate | 7.4.5.Final | Object-relational mapping, repositories, optimistic locking |
 | **Database (Prod)** | MySQL Server | 8.0 | Relational database storage |
+| **Cache & Distributed Store** | Redis (Alpine) | 7.x | Distributed rate limiting counters & hot path caching |
 | **Database (Test)** | Testcontainers MySQL 8.0 & H2 | MySQL 8.0 / H2 2.4 | Isolated MySQL 8 containers for integration tests; H2 for unit suites |
 | **Real-Time Push** | Spring WebSocket + STOMP | 4.1.1 | Event-driven push notifications to connected clients |
 | **Observability** | Spring Boot Actuator | 4.1.1 | Container healthchecks, liveness & readiness probes |
@@ -242,6 +248,29 @@ To avoid false positives caused by dialect and locking discrepancies between in-
 
 ---
 
+### 3.6 Distributed Rate Limiting & Multi-Tier Caching (Redis 7)
+* **Distributed Brute-Force Rate Limiting (`RateLimitingFilter`)**:
+  - Key Pattern: `rl:login:<clientIp>`.
+  - Atomic Redis `INCR` + `EXPIRE` (60-second TTL): First request atomically initializes the key and sets TTL; subsequent requests within the window increment the counter without resetting the TTL.
+  - Quota Enforcement: When requests exceed `security.rate-limit.login.max-requests` (default: 10 req/min), the filter rejects with HTTP 429 Too Many Requests, header `Retry-After: 60`, and exact structured JSON response payload:
+    ```json
+    {
+      "error": "Too Many Requests",
+      "message": "Too many authentication attempts. Please try again after 60 seconds.",
+      "status": 429
+    }
+    ```
+  - **Multi-Instance Quota Verification**: Proven in `RedisRateLimitingIntegrationTest` where two distinct backend server nodes (`node1` and `node2`) sharing a single Redis instance enforce a single combined quota (6 requests on Node 1 + 4 on Node 2 succeed, and the 11th on Node 2 is blocked with HTTP 429).
+  - **High-Availability Resilient Fallback (Fail-Open / Local Tracker)**: Redis operations are wrapped in safe exception handling. If Redis times out, disconnects, or crashes, the filter logs a warning and gracefully falls back to local in-memory sliding-window tracking, guaranteeing zero HTTP 500 errors on authentication.
+* **Hot Path Multi-Tier Caching (`CacheConfig` & `HospitalProfileService`)**:
+  - Serialization: Redis keys serialized as UTF-8 Strings (`StringRedisSerializer`), values serialized as JSON (`RedisSerializer.json()`) to ensure human readability and cross-language interoperability.
+  - Granular TTL Management: 10 minutes default TTL, 15 minutes dedicated TTL for `hospital_profiles` (`lifelink:cache:hospital_profiles::<userId>`).
+  - Read-Heavy Acceleration (`@Cacheable`): `getProfile(userId)` caches hospital profile data in Redis. Subsequent reads hit Redis directly in sub-millisecond latency, completely bypassing MySQL database queries.
+  - Deterministic Invalidation (`@CacheEvict`): `createProfile` and `updateProfile` evict cached entries on write mutations, ensuring immediate consistency on subsequent reads.
+  - **Resilient Cache Error Handler**: Custom `CacheErrorHandler` logs warnings on cache GET/PUT/EVICT/CLEAR failures and falls back directly to the database, ensuring zero downtime during cache outages.
+
+---
+
 ## 4. DevOps, Docker Containerization & CI Pipeline
 
 ```mermaid
@@ -324,12 +353,13 @@ flowchart LR
 | **Backend Controllers & Web Security** | JUnit 5 + MockMvc | 35 | **100%** | Admin, Auth, Donor, Hospital, EmergencyRequest, Notification Security |
 | **Backend Integration & Concurrency** | JUnit 5 + Spring Data JPA + Testcontainers | 13 | **100%** | `@Version` optimistic locking on MySQL 8, emergency request integration, lifecycle E2E |
 | **Backend Security, Filters & Actuator** | JUnit 5 + Mockito | 20 | **100%** | Actuator probes, JwtFilter, RateLimitingFilter (7 tests including anti-spoofing) |
-| **Backend Core Services & Config** | JUnit 5 + Mockito | 83 | **100%** | DonorMatching (25 tests), DemoDataInitializer (3 tests), DonorProfile, EmergencyRequest, Hospital, JWT, User |
+| **Backend Redis Rate Limiting & Caching** | JUnit 5 + Testcontainers Redis 7 | 11 | **100%** | Redis distributed rate limiting unit tests (5), multi-instance cluster limit proof (4), hospital profile caching & eviction (2) |
+| **Backend Core Services & Config** | JUnit 5 + Mockito | 88 | **100%** | DonorMatching (30 tests incl. bounding box), DemoDataInitializer (3 tests), DonorProfile, EmergencyRequest, Hospital, JWT, User |
 | **Application Context Boot** | SpringBootTest | 1 | **100%** | Context loading verification |
-| **Total Backend Tests** | **JUnit 5 / Maven** | **152** | **100%** | Zero failures, zero errors |
+| **Total Backend Tests** | **JUnit 5 / Maven** | **168** | **100%** | Zero failures, zero errors |
 | **Frontend Component & Unit** | Vitest + React Testing Library | **50** | **100%** | Badges, AuthContext, Modals, ProtectedRoutes, DonorDashboard, HospitalDashboard |
-| **Total Automated Tests** | **Full Stack** | **202** | **100%** | All automated tests passing |
-| **Backend Code Coverage** | **JaCoCo 0.8.12** | **89.8% Lines / 89.4% Instructions** | **Artifact Uploaded** | 39 analyzed classes, HTML/XML/CSV reports generated |
+| **Total Automated Tests** | **Full Stack** | **218** | **100%** | All automated tests passing |
+| **Backend Code Coverage** | **JaCoCo 0.8.12** | **89.8% Lines / 89.4% Instructions** | **Artifact Uploaded** | 41 analyzed classes, HTML/XML/CSV reports generated |
 | **CI Pipeline Status** | **GitHub Actions** | **4 Jobs + Dependabot** | **100% GREEN** | Backend build/JaCoCo coverage, Frontend lint/test/build, Docker verification, GHCR publish |
 
 ---

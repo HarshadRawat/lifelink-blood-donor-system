@@ -94,6 +94,31 @@ This document records the architectural, security, and infrastructure decisions 
   - *In-Memory Spatial Index (QuadTree / R-Tree in JVM memory)*: Fails to scale across horizontal backend replicas without distributed cache invalidation and incurs heavy memory overhead on JVM startup.
 * **Trade-Off**: A square bounding box circumscribes the circle of radius $r$, pulling candidate false positives in the corners ($20.0\text{ km} < d \le 28.28\text{ km}$). This trade-off is negligible because Tier 2 Haversine refinement filters ~160 rows in less than $0.05\text{ ms}$ in Java. Full benchmark logs and EXPLAIN execution plans are documented in [`docs/BENCHMARK.md`](file:///D:/blood-donor-system/docs/BENCHMARK.md).
 
+---
+
+### ADR 010: Distributed Rate Limiting & Multi-Tier Caching via Redis
+* **Context & Decision**: Scaled LifeLink's rate limiting and hot path data access to support distributed multi-instance deployments using Redis 7:
+  1. **Distributed Rate Limiting**: Centralized brute-force protection for `/api/auth/login` and `/api/auth/register` using Redis atomic `INCR` + `EXPIRE` (60-second TTL) under key pattern `rl:login:<clientIp>`. Returns HTTP 429 Too Many Requests with header `Retry-After: 60` and structured JSON error payload when requests exceed threshold (10 req/min).
+  2. **Multi-Tier Caching**: Configured `RedisCacheManager` with UTF-8 String keys and Jackson JSON value serialization (`RedisSerializer.json()`), explicit TTL (10 minutes default, 15 minutes for `hospital_profiles`). Annotated read-heavy hospital profile endpoints (`getProfile`) with `@Cacheable(value = "hospital_profiles", key = "#userId")` and mutative write endpoints (`createProfile`, `updateProfile`) with `@CacheEvict`.
+  3. **High-Availability Resilient Fallback (Fail-Open / Local In-Memory)**: Implemented custom `CacheErrorHandler` and wrapped Redis rate limiter operations. If Redis experiences network partition, timeout, or node crash, authentication requests automatically fall back to local in-memory sliding-window trackers without throwing HTTP 500 errors, and cache misses fall back to direct database queries.
+* **Why**:
+  1. **Distributed Protection**: In horizontally scaled deployments behind load balancers, an in-memory rate limiter only tracks requests per JVM node. An attacker spraying requests across $N$ instances could execute $N \times 10$ attempts before being blocked. Redis unifies the rate limit counter across all cluster instances.
+  2. **Hot Path Database Offloading**: Hospital profile metadata is read frequently during donor matching, emergency request browsing, and hospital dashboard rendering, but updated rarely. Caching in Redis bypasses MySQL query parsing and network roundtrips.
+* **Rate Limiting Algorithm Comparison & Trade-Offs**:
+  1. **Fixed-Window Counter (Chosen)**:
+     - *Algorithm*: Atomic Redis `INCR key`; if `count == 1`, set `EXPIRE key 60`. If `count > 10`, reject.
+     - *Complexity*: $\mathcal{O}(1)$ time, $\mathcal{O}(1)$ space per client IP (~100 bytes in Redis).
+     - *Window-Edge Burst Caveat*: A client can submit 10 requests at the very end of window $t$ ($t=59\text{s}$) and 10 requests at the start of window $t+1$ ($t=61\text{s}$), resulting in a burst of 20 requests within a 2-second span.
+  2. **Sliding-Window Log (ZSET)**:
+     - *Algorithm*: Stores request timestamps in Redis Sorted Sets (`ZADD`, `ZREMRANGEBYSCORE`, `ZCARD`).
+     - *Pros*: Eliminates the window-edge burst vulnerability entirely.
+     - *Cons*: Consumes significantly higher memory ($\mathcal{O}(N)$ timestamps per active IP) and requires multiple Redis operations or Lua scripts per request.
+  3. **Token Bucket / Leaky Bucket (Bucket4j / Redis Lua)**:
+     - *Algorithm*: Maintains token replenishment rates and burst capacity via Lua scripts.
+     - *Cons*: Incurs Lua script execution overhead and introduces external stateful synchronization complexities.
+  - *Conclusion*: Fixed-window counter with atomic TTL provides the optimal trade-off of sub-millisecond execution latency, minimal Redis memory footprint, and robust protection against brute-force attacks, augmented with transparent local in-memory fallback during Redis outages.
+
+
 
 
 
