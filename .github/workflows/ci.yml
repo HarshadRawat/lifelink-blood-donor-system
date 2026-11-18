@@ -129,7 +129,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Trivy Vulnerability Scanner (Repository Filesystem)
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@0.28.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
