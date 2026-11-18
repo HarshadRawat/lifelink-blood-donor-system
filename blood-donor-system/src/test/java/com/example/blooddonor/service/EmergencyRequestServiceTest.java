@@ -48,6 +48,9 @@ class EmergencyRequestServiceTest {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private EmergencyRequestService emergencyRequestService;
 
@@ -119,9 +122,11 @@ class EmergencyRequestServiceTest {
         assertEquals(RequestStatus.ACTIVE, result.getStatus());
 
 
-        // Verify database save
+        // Verify database save and event publishing
         verify(emergencyRequestRepository)
                 .save(any(EmergencyRequest.class));
+        verify(eventPublisher)
+                .publishEvent(any(com.example.blooddonor.event.EmergencyRequestCreatedEvent.class));
     }
 
     @Test
