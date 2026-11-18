@@ -156,3 +156,39 @@ This document records the architectural, security, and infrastructure decisions 
   - *Distributed Locking with Redis (Redlock)*: Adds external network roundtrips and split-brain risks; MySQL's native row lock is ACID-compliant, localized, and zero-overhead for transactional data already stored in MySQL.
   - *Distributed Scheduler (Multi-Instance Scalability)*: In multi-instance deployments, concurrent runs of `@Scheduled` escalation tasks can be synchronized using ShedLock (`@EnableSchedulerLock`) or Redis distributed locks (`SETNX`).
 * **Trade-Off**: Row-level locking briefly holds an InnoDB exclusive lock on the `emergency_requests` row for the duration of the completion transaction (~5-10ms), which is negligible for emergency hospital workflows while guaranteeing zero blood unit over-fulfillment.
+
+### ADR 013: Security Upgrades — Short-lived JWTs, Refresh Token Rotation with Token Family Invalidation, Brute-Force Account Lockout, WebSocket Mid-Session Expiration, Hospital Verification, and Audited Contact Access
+* **Context & Decision**: Hardened platform security across authentication, authorization, session lifecycles, and sensitive health/contact data protection:
+  1. **Short-lived Access Token & Refresh Token Flow with Rotation and Revocation**:
+     - Shortened access token validity from 24 hours to 15 minutes (`900,000 ms`).
+     - Refresh tokens are 256-bit cryptographically secure pseudorandom strings valid for 7 days.
+     - Tokens are stored in MySQL table `refresh_tokens` strictly as SHA-256 hex digests (`token_hash`), preventing token exposure in the event of database exfiltration.
+     - Implemented Token Rotation: On `/api/auth/refresh`, each presented refresh token is immediately marked `revoked = true`, linked to the replacement token (`replaced_by_token_hash`), and exchanged for a new 15-minute access token and a fresh refresh token.
+     - **Token Family Invalidation (Compromise / Reuse Detection)**: If a revoked refresh token is presented, the system detects a token hijack (both attacker and legitimate user hold copies). It immediately revokes all active tokens for that `user_id`, terminating all sessions and forcing full re-authentication.
+     - User logout (`/api/auth/logout`) explicitly marks the active refresh token as revoked.
+     - Frontend React client (`api/client.js`) implements a seamless 401 interceptor that requests `/api/auth/refresh`, updates `sessionStorage`, and retries the original request once transparently.
+  2. **WebSocket Mid-Session Expiry Defense**:
+     - `WebSocketAuthInterceptor` extracts `tokenExpiresAt` from the JWT claims on `CONNECT` and caches it within STOMP session attributes.
+     - Inbound frames (`SUBSCRIBE`, `SEND`) check `Instant.now().isAfter(tokenExpiresAt)`. If expired, a `MessageDeliveryException` is thrown, closing or rejecting the frame and forcing the frontend client to reconnect with a fresh rotated access token.
+  3. **Account Lockout on Repeated Failed Logins (Brute-Force Protection)**:
+     - Track `failed_login_attempts` (INT) and `account_locked_until` (DATETIME) on `users`.
+     - After 5 consecutive failed authentication attempts on an account, the user is locked out for 15 minutes, returning HTTP 409/423 with the time remaining.
+     - Successful login resets `failed_login_attempts = 0` and `account_locked_until = null`.
+  4. **Hospital Administrative Verification Workflow**:
+     - Added `verified` (BOOLEAN, default `FALSE`) to `hospital_profiles`.
+     - Newly registered hospital accounts are unverified and cannot create emergency requests (`createRequest`), failing fast with `BusinessRuleException` (HTTP 409 Conflict) until approved by an administrator.
+     - Admin oversight endpoints: `GET /api/admin/hospitals/pending` (paginated list of unverified hospitals) and `PATCH /api/admin/hospitals/{id}/verify` (approve/reject registration).
+     - Flyway migration `V5__add_security_upgrades.sql` backfills existing seeded hospital profiles to `verified = TRUE` to ensure zero regression across preexisting test fixtures and demo environments.
+  5. **Donor Contact Unlock Audit Logging**:
+     - Created `contact_unlock_audit_logs` table tracking `hospital_user_id`, `donor_id`, `match_id`, `emergency_request_id`, `unlocked_at`, and `ip_address` (resolved via `X-Forwarded-For` or remote socket address).
+     - In `DonorMatchingService.getDonorContact`, every successful unlock of unmasked donor contact details (after verifying ownership and donor consent) is permanently logged for compliance and non-repudiation.
+  6. **Security Headers & CORS**:
+     - Configured Spring Security HTTP response headers: Content-Security-Policy (CSP), `X-Content-Type-Options: nosniff`, and `X-Frame-Options: SAMEORIGIN`.
+  7. **Automated Security Scan in CI**:
+     - Integrated Aqua Security Trivy vulnerability scanning into `.github/workflows/ci.yml` targeting dependencies and container filesystems with `severity: CRITICAL,HIGH`.
+* **Why**:
+  - *Risk of Long-lived JWTs*: 24-hour stateless JWTs cannot be revoked without distributed blacklists; shortening expiration to 15 minutes drastically limits the attack window of an intercepted access token.
+  - *Token Reuse Detection*: Single-use refresh token rotation combined with family invalidation renders replay attacks detectable and auto-neutralizing.
+  - *Defense in Depth for Sensitive Medical Data*: Hospital verification prevents spam and spoofed emergency broadcasts, while audit logging deters unauthorized scraping of donor personal identifying information (PII).
+* **Trade-Off**:
+  - Refresh token rotation adds a fast indexed read/write on the `refresh_tokens` table every 15 minutes per active client session, which is negligible and comfortably handled by database indexes.

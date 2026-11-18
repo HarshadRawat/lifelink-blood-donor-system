@@ -500,11 +500,15 @@ LifeLink includes a dedicated benchmark suite measuring matching latency on 100,
 
 ## Security & Privacy Design
 
-1. **Context-Derived Principals**: Authenticated user IDs are extracted directly from `SecurityContextHolder.getContext().getAuthentication().getPrincipal()`. The server never trusts client-supplied IDs.
-2. **Defensive PII Exposure**: Contact information (telephone numbers and emails) is masked at the service level and only revealed when the donor explicitly marks their match as `ACCEPTED` with consent.
-3. **Brute-Force & Credential Stuffing Defense**: `RateLimitingFilter` enforces a 10 req/min sliding-window limit per IP on `/api/auth/login` and `/api/auth/register` with `X-Forwarded-For` proxy resolution.
-4. **IDOR Prevention**: Emergency request ownership checks verify that the requesting hospital owns the target request before permitting match or contact inspection.
-5. **Optimistic Locking**: JPA `@Version` on emergency requests prevents race conditions when concurrent users update blood request status or units.
+1. **Short-Lived Access Tokens & Refresh Token Rotation**: Access tokens expire in 15 minutes; refresh tokens (7-day validity) are stored SHA-256 hashed and rotated on every exchange at `/api/auth/refresh`. Compromise reuse detection invalidates all user sessions immediately upon detection of a revoked token replay.
+2. **Brute-Force Protection & Account Lockout**: After 5 consecutive failed login attempts, user accounts are locked for 15 minutes (returning HTTP 409/423). Successful login resets attempt counters.
+3. **Hospital Administrative Verification**: New hospital accounts require administrative review (`GET /api/admin/hospitals/pending`, `PATCH /api/admin/hospitals/{id}/verify`) before emergency blood requests can be published, eliminating fraud and false broadcasts.
+4. **Donor Contact Unlock Audit Logging**: Every unmasking of donor telephone/email by hospital staff is logged to `contact_unlock_audit_logs` with hospital user ID, donor ID, match ID, timestamp, and client IP address.
+5. **WebSocket Mid-Session Expiration**: `WebSocketAuthInterceptor` checks cached token expiration on subsequent inbound frames (`SUBSCRIBE`, `SEND`), disconnecting expired sessions and forcing client token renewal.
+6. **Context-Derived Principals & IDOR Prevention**: Authenticated user IDs are extracted directly from `SecurityContextHolder.getContext().getAuthentication().getPrincipal()`. The server never trusts client-supplied IDs, and verifies hospital request ownership before match or contact inspection.
+7. **Defensive PII Exposure**: Contact information (telephone numbers and emails) is masked at the service layer and only revealed when the donor explicitly marks their match as `ACCEPTED` with consent.
+8. **Sliding-Window IP Rate Limiting**: `RateLimitingFilter` enforces a 10 req/min sliding-window limit per IP on `/api/auth/login` and `/api/auth/register` with reverse-proxy header resolution.
+9. **HTTP Hardening Headers & CI Scanning**: Spring Security sets CSP, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: SAMEORIGIN`. CI pipeline automates Aqua Security Trivy vulnerability scans.
 
 For complete security specifications, see [docs/SECURITY.md](docs/SECURITY.md).
 
