@@ -123,3 +123,17 @@ This document records the architectural, security, and infrastructure decisions 
 
 
 
+
+
+---
+
+### ADR 011: Asynchronous Event-Driven Notifications via RabbitMQ (AMQP) & Dead-Letter Queue (DLQ)
+* **Context & Decision**: Decoupled emergency request creation from synchronous donor matching and WebSocket push notifications using RabbitMQ 3.x with transactional outbox event publishing and Dead-Letter Queue (DLQ) recovery:
+  1. **Transactional Event Publishing**: The hospital's emergency request creation transaction publishes an `EmergencyRequestCreatedEvent` using `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)`. This guarantees that AMQP messages are only pushed to RabbitMQ after the database row has committed, eliminating race conditions where consumers read uncommitted data.
+  2. **AMQP Topology & Resilient Consumer**: Configured topic exchange `lifelink.events`, durable queue `notifications.q`, and direct dead-letter exchange `lifelink.events.dlx` routing to `notifications.dlq`. Asynchronous consumer `@RabbitListener` handles candidate matching and WebSocket dispatch. On unexpected failure, Spring AMQP automatically retries with exponential backoff (`initial-interval=1000ms`, `multiplier=2.0`, `max-attempts=3`) before rejecting to the DLQ (`default-requeue-rejected=false`), preventing message loss and poison-pill crashes.
+  3. **Consumer Idempotency**: Added a unique composite constraint `uk_request_donor` on `request_donor_matches (request_id, donor_id)` via Flyway migration `V3__add_unique_constraint_request_donor.sql`. Re-delivery or retry of events cannot produce duplicate matches or duplicate donor notifications.
+* **Why**: Synchronous matching during request creation forces hospitals to wait while distance calculations and multi-donor WebSocket pushes execute, risking HTTP timeouts and complete creation failure if the notification layer fails. Decoupling ensures `POST /api/emergency-requests` returns immediately with sub-millisecond latency.
+* **Alternatives Considered**:
+  - *Apache Kafka*: Excellent for append-only event logs, high-throughput analytics, and partition replay, but introduces heavy operational complexity (ZooKeeper/KRaft, partition rebalances) unnecessary for discrete task queue delivery. RabbitMQ provides superior discrete message acknowledgement, individual message TTL, native dead-letter exchanges, and simpler AMQP routing for point-to-point task queues.
+  - *Spring `@Async` / In-Memory `TaskExecutor`*: Completely lacks persistence; any JVM crash, container restart, or deployment wipes in-flight notifications permanently.
+* **Trade-Off**: Introduces RabbitMQ as an external message broker dependency in deployment. The single-instance in-memory STOMP broker remains appropriate for single-node WebSocket fan-out, but multi-node horizontal scaling requires enabling RabbitMQ's Web STOMP Relay plugin.

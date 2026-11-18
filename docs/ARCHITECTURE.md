@@ -104,3 +104,22 @@ Standard HTTP polling wastes bandwidth and causes latency during emergencies. Li
 * **Principal Extraction**: User identity is derived strictly from `Authentication.getPrincipal()`.
 * **PII Masking**: Prior to donor acceptance with consent, `contactNumber` and `email` remain masked (`null`).
 * **IDOR Protection**: Request ownership verification ensures hospitals can only query matches and contacts associated with requests they created.
+
+
+---
+
+## 6. Asynchronous Messaging & Dead-Letter Queue Pipeline (RabbitMQ AMQP)
+
+To prevent HTTP thread starvation and decouple operational workflows (Task 7):
+1. **Transactional Event Publishing**:
+   - `EmergencyRequestService` publishes an internal domain event `EmergencyRequestCreatedEvent`.
+   - `EmergencyRequestEventPublisher` listens via `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)` to ensure messages are pushed to RabbitMQ exchange `lifelink.events` strictly after MySQL commits.
+2. **Work Queue & Dead-Letter Exchange Topology**:
+   - Exchange: `lifelink.events` (TopicExchange)
+   - Work Queue: `notifications.q` (routed via `emergency.request.created`)
+   - Dead-Letter Exchange: `lifelink.events.dlx` (DirectExchange)
+   - Dead-Letter Queue: `notifications.dlq` (routed via `notifications.dlq`)
+3. **Consumer & Idempotency Safeguards**:
+   - `EmergencyNotificationConsumer` processes events asynchronously on `notifications.q`.
+   - Flyway `V3` migration enforces `uk_request_donor` constraint on `(request_id, donor_id)`, ensuring at-least-once message delivery cannot duplicate database records or push alerts.
+   - Spring AMQP listener automatically retries failed events with exponential backoff before rejecting unrecoverable messages to `notifications.dlq`.
