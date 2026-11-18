@@ -14,6 +14,7 @@ import com.example.blooddonor.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -25,7 +26,9 @@ public class DonorMatchingService {
     private final RequestDonorMatchRepository requestDonorMatchRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final Clock clock;
 
+    private long cooldownDays = 90;
 
     public DonorMatchingService(
             DonorProfileRepository donorProfileRepository,
@@ -33,24 +36,43 @@ public class DonorMatchingService {
             RequestDonorMatchRepository requestDonorMatchRepository,
             UserRepository userRepository,
             NotificationService notificationService) {
+        this(donorProfileRepository, emergencyRequestRepository, requestDonorMatchRepository, userRepository, notificationService, Clock.systemDefaultZone());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DonorMatchingService(
+            DonorProfileRepository donorProfileRepository,
+            EmergencyRequestRepository emergencyRequestRepository,
+            RequestDonorMatchRepository requestDonorMatchRepository,
+            UserRepository userRepository,
+            NotificationService notificationService,
+            Clock clock) {
 
         this.donorProfileRepository = donorProfileRepository;
         this.emergencyRequestRepository = emergencyRequestRepository;
         this.requestDonorMatchRepository = requestDonorMatchRepository;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
+        this.clock = clock != null ? clock : Clock.systemDefaultZone();
+    }
+
+    public void setCooldownDays(long cooldownDays) {
+        this.cooldownDays = cooldownDays;
     }
 
     public List<RequestDonorMatchResponse> findMatches(Long requestId) {
 
-        // Matching radius
-        final double MATCHING_RADIUS_KM = 20.0;
         // 1. Find emergency request
         EmergencyRequest emergencyRequest =
                 emergencyRequestRepository.findById(requestId)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Emergency request not found"));
+
+        // Matching radius from request (supports Task 8 dynamic escalation)
+        final double MATCHING_RADIUS_KM = emergencyRequest.getCurrentRadiusKm() != null
+                ? emergencyRequest.getCurrentRadiusKm()
+                : 20.0;
 
         // 2. Find compatible blood groups
         List<String> compatibleBloodGroups =
@@ -118,6 +140,15 @@ public class DonorMatchingService {
                     );
 
                     return distance <= MATCHING_RADIUS_KM;
+                })
+
+                // Donor must not have donated within the 90-day cooldown window (Task 8)
+                .filter(donor -> {
+                    if (donor.getLastDonationDate() == null) {
+                        return true;
+                    }
+                    LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(cooldownDays);
+                    return donor.getLastDonationDate().isBefore(cutoff);
                 })
 
                 // Avoid duplicate matches
@@ -364,24 +395,37 @@ public class DonorMatchingService {
                     "Only an accepted match can be completed");
         }
 
-        // 5. Mark this donor match as completed
+        // 5. Prevent over-fulfillment: serialize completions via pessimistic row-lock on EmergencyRequest
+        Long reqId = match.getEmergencyRequest().getId();
+        EmergencyRequest emergencyRequest = emergencyRequestRepository.findByIdWithPessimisticLock(reqId)
+                .orElse(match.getEmergencyRequest());
+
+        if (emergencyRequest.getStatus() == RequestStatus.FULFILLED) {
+            throw new BusinessRuleException("Emergency request is already fully fulfilled");
+        }
+
+        // 6. Mark this donor match as completed and record donation date for cooldown (Task 8)
         match.setStatus(MatchStatus.COMPLETED);
+        DonorProfile donor = match.getDonor();
+        if (donor != null) {
+            donor.setLastDonationDate(LocalDateTime.now(clock));
+            donorProfileRepository.save(donor);
+        }
 
         RequestDonorMatch updatedMatch =
                 requestDonorMatchRepository.save(match);
 
-        // 6. Check how many donations are completed
-        EmergencyRequest emergencyRequest =
-                updatedMatch.getEmergencyRequest();
+        // 7. Check whether required units are fulfilled and guard against concurrent over-fulfillment
+        long completedUnits = requestDonorMatchRepository
+                .countByEmergencyRequestAndStatus(
+                        emergencyRequest,
+                        MatchStatus.COMPLETED
+                );
 
-        long completedUnits =
-                requestDonorMatchRepository
-                        .countByEmergencyRequestAndStatus(
-                                emergencyRequest,
-                                MatchStatus.COMPLETED
-                        );
+        if (completedUnits > emergencyRequest.getUnitsRequired()) {
+            throw new BusinessRuleException("Emergency request is already fully fulfilled");
+        }
 
-        // 7. Check whether required units are fulfilled
         if (completedUnits >=
                 emergencyRequest.getUnitsRequired()) {
 

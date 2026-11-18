@@ -74,6 +74,18 @@ public class GlobalExceptionHandler {
                 .body(Map.of("message", ex.getMessage()));
     }
 
+    @ExceptionHandler({
+            org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+            jakarta.persistence.OptimisticLockException.class
+    })
+    public ResponseEntity<Map<String, String>> handleOptimisticLockingFailure(
+            Exception ex) {
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(Map.of("message", "Conflict: resource was updated concurrently by another transaction"));
+    }
+
     @ExceptionHandler(NotificationAccessDeniedException.class)
     public ResponseEntity<Map<String, String>> handleNotificationAccessDenied(
             NotificationAccessDeniedException ex) {
