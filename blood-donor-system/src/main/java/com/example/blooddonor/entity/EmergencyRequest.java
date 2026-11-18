@@ -30,6 +30,12 @@ public class EmergencyRequest {
 
     private LocalDateTime createdAt;
 
+    @Column(name = "current_radius_km", nullable = false)
+    private Double currentRadiusKm = 20.0;
+
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
+
     @Version
     private Long version;
 

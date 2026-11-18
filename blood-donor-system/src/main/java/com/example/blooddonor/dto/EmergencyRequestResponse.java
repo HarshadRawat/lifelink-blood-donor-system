@@ -28,4 +28,8 @@ public class EmergencyRequestResponse {
     private Long hospitalId;
 
     private String hospitalName;
+
+    private Double currentRadiusKm;
+
+    private LocalDateTime expiresAt;
 }

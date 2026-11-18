@@ -33,4 +33,7 @@ public class DonorProfile {
     private String contactNumber;
 
     private boolean available;
+
+    @Column(name = "last_donation_date")
+    private java.time.LocalDateTime lastDonationDate;
 }

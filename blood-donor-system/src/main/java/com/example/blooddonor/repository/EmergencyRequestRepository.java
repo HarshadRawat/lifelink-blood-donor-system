@@ -18,4 +18,20 @@ public interface EmergencyRequestRepository
     );
 
     long countByStatus(RequestStatus status);
+
+    java.util.List<EmergencyRequest> findByStatusAndCreatedAtBefore(
+            RequestStatus status,
+            java.time.LocalDateTime createdAt
+    );
+
+    java.util.List<EmergencyRequest> findByStatusAndExpiresAtBefore(
+            RequestStatus status,
+            java.time.LocalDateTime expiresAt
+    );
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT r FROM EmergencyRequest r WHERE r.id = :id")
+    java.util.Optional<EmergencyRequest> findByIdWithPessimisticLock(
+            @org.springframework.data.repository.query.Param("id") Long id
+    );
 }
