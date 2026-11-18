@@ -9,7 +9,7 @@
 [![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1.svg)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](DOCKER.md)
 [![GHCR](https://img.shields.io/badge/Container%20Registry-GHCR-blue.svg?logo=github)](https://github.com/HarshadRawat/lifelink-blood-donor-system/pkgs/container/lifelink-backend)
-[![Tests](https://img.shields.io/badge/Tests-218%20Passed-success.svg)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/Tests-235%20Passed-success.svg)](#testing--quality-assurance)
 [![Benchmark](https://img.shields.io/badge/100k%20Donors-12.5ms%20(9.3x%20faster)-brightgreen.svg)](docs/BENCHMARK.md)
 
 LifeLink is an emergency blood coordination platform built with Java Spring Boot and React. It bridges the critical latency gap between hospital blood shortages and nearby eligible donors using geolocation radius search, biological blood compatibility matrix matching, real-time push notifications over WebSockets, and privacy-first contact sharing. Detailed architecture documentation is maintained in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and architectural decisions are tracked in [DECISIONS.md](DECISIONS.md).
@@ -72,9 +72,12 @@ During medical emergencies, trauma care, and surgeries, hospitals often face acu
 * **Real-time Push Notifications**:
   * STOMP protocol over WebSocket with secure JWT handshake authentication.
   * Unread count badges, in-app notification drawer, and auto-dismiss alerts.
-* **Concurrency Control & Safety**:
-  * Optimistic concurrency locking (`@Version`) preventing race conditions during concurrent request updates.
-  * Spring Data JPA Specifications enabling composable multi-criteria dynamic filtering and database pagination (`LIMIT/OFFSET`).
+* **Concurrency Control, Escalation & Cooldown**:
+  * **Optimistic & Pessimistic Locking**: Optimistic locking (`@Version`) prevents lost updates on entity modifications, while row-level pessimistic locking (`PESSIMISTIC_WRITE` / `SELECT ... FOR UPDATE`) serializes quota fulfillment to strictly prevent blood unit over-fulfillment.
+  * **Automated Radius Escalation**: Scheduled background job (`@Scheduled`) evaluates active requests lacking accepted donors after 15 minutes and expands search radius (20 km → 40 km, up to 50 km), re-notifying only newly discovered donors.
+  * **90-Day Donation Cooldown**: WHO-standard 90-day cooldown tracked via `lastDonationDate`, automatically updated upon donation completion and enforced during candidate matching.
+  * **Automatic Request TTL Expiry**: Stale active requests past TTL (24h) are transitioned to `CANCELLED`.
+  * **Deterministic Time-Travel Testing**: Configured mockable `java.time.Clock` bean for deterministic testing of cooldown windows and escalation time thresholds.
 * **Production Observability & Resilience**:
   * **Spring Boot Actuator**: Native `/actuator/health` liveness and readiness probes checking database connectivity in milliseconds.
   * **Brute-Force Rate Limiting**: In-memory, thread-safe sliding-window filter (`10 requests / 60 seconds` per IP) returning HTTP 429 on abuse.
@@ -434,7 +437,7 @@ flowchart LR
 
 ## Testing & Quality Assurance
 
-LifeLink maintains a full suite of **207 automated tests** (157 backend tests across controllers, services, security, concurrency, demo initialization, geolocation boundary conditions, and lifecycle integration + 50 frontend component tests):
+LifeLink maintains a full suite of **235 automated tests** (185 backend tests across controllers, services, security, 32-thread concurrency, scheduled escalation, 90-day cooldown, demo initialization, geolocation boundary conditions, and lifecycle integration + 50 frontend component tests):
 
 ### 1. Frontend Automated Tests (Vitest + React Testing Library)
 A suite of **50 automated frontend tests** covering UI components, state contexts, authentication routing, and core user dashboards:
@@ -458,27 +461,29 @@ npm run build   # Production asset compilation
 ```
 
 ### 2. Backend Automated Tests (JUnit 5 + Mockito + Testcontainers MySQL 8 + In-Memory H2)
-**157 automated backend tests** covering controllers, services, repositories, security authorization, concurrency, demo seeding, and emergency lifecycle:
+**185 automated backend tests** covering controllers, services, repositories, security authorization, concurrency, demo seeding, and emergency lifecycle:
 
 ```powershell
 cd blood-donor-system
 .\mvnw.cmd test
 ```
 
-* **Two-Tier Geolocation Matching & Boundary Tests (`DonorMatchingServiceTest` - 30 tests)**:
-  * Tests #60 to #64: Validates $\mathcal{O}(1)$ bounding-box candidate query (`findCandidates`), exact Haversine refinement ($\le 20.0\text{ km}$), nearest-first distance sorting, boundary conditions (19.8 km included vs. 20.2 km excluded), and corner-candidate elimination where donors inside the bounding box range but exceeding the 20 km circular radius are safely pruned.
-* **Testcontainers MySQL 8.0 Integration (`AbstractMySqlIT`)**:
+* **Testcontainers MySQL 8.0 & Concurrency Integration (`AbstractMySqlIT`)**:
   * Managed MySQL 8.0 container annotated with `@Testcontainers(disabledWithoutDocker = true)` for seamless local-to-CI portability.
   * Dynamic JDBC configuration via Spring Boot `@ServiceConnection`.
-  * Real Flyway V1 and V2 migrations executed directly against the container with `spring.jpa.hibernate.ddl-auto=validate` to verify production schema fidelity.
-  * `EmergencyRequestConcurrencyTest` (1 test): Validates JPA `@Version` optimistic locking under concurrent updates against real MySQL InnoDB engine without H2 emulation. Configured with `@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)` to prevent embedded database substitution.
+  * Real Flyway V1, V2, V3, and V4 migrations executed directly against the container with `spring.jpa.hibernate.ddl-auto=validate` to verify production schema fidelity.
+  * `EmergencyConcurrency32ThreadIT` (2 tests): **32-thread extreme concurrency validation**. Simulates 32 simultaneous donor match completion attempts on a 2-unit request. Proves strictly 2 completions succeed (HTTP 200), 30 excess attempts receive HTTP 409 Conflict, and completed units never exceed required units via row-level pessimistic locking (`SELECT ... FOR UPDATE`). Also proves concurrent donor acceptances on fulfilled requests return HTTP 409 Conflict.
+  * `EmergencyRequestConcurrencyTest` (1 test): Validates JPA `@Version` optimistic locking under concurrent updates against real MySQL InnoDB engine without H2 emulation.
   * `EmergencyLifecycleIntegrationTest` (1 test): Validates the complete 8-step emergency workflow end-to-end against real MySQL (Hospital registration -> Donor matching via Haversine & ABO -> Contact privacy masking -> Donor consent -> Revealed contact -> Fulfillment).
+* **Two-Tier Geolocation Matching, Cooldown & Escalation Tests**:
+  * `DonorMatchingServiceTest` (37 tests): Validates $\mathcal{O}(1)$ bounding-box candidate query (`findCandidates`), exact Haversine refinement ($\le 20.0\text{ km}$), nearest-first distance sorting, boundary conditions (19.8 km included vs. 20.2 km excluded), WHO 90-day cooldown enforcement (excluding donors who donated $\le 90$ days ago), dynamic radius escalation (matching distant donors when radius expands to 40 km), and over-fulfillment prevention.
+  * `EmergencyEscalationServiceTest` (4 tests): Validates deterministic time-travel using mockable `java.time.Clock` bean for scheduled radius escalation (20 km → 40 km capped at 50 km) and automatic TTL request expiry.
 * **Unit & Mock MVC Suites (Fast Inner-Loop Feedback)**:
   * `RateLimitingFilterTest` (7 tests): Verifies sliding-window IP throttling, HTTP 429 response enforcement, reverse proxy header extraction, and spoofing resistance.
   * `DemoDataInitializerTest` (3 tests): Verifies idempotent seeding of Bengaluru demo cluster and conditional profile activation.
   * `ActuatorSecurityTest` (2 tests): Validates public health access and protection of sensitive internal metrics.
   * `JwtFilterTest` & `JwtSecurityIntegrationTest` (11 tests): Token verification, expiration, malformed token handling, and role extraction.
-  * Controller & Service Unit Tests (132 tests): Full Mockito coverage across donor, hospital, emergency request, notification, admin, and user management flows.
+  * Controller & Service Unit Tests (143 tests): Full Mockito coverage across donor, hospital, emergency request, notification, admin, and user management flows.
 
 ### 3. 100,000 Donor Geolocation Benchmark Suite
 LifeLink includes a dedicated benchmark suite measuring matching latency on 100,000 synthetic donor records across MySQL 8.0:
