@@ -14,7 +14,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
+import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
@@ -38,6 +41,21 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
         if (accessor == null) {
             return message;
+        }
+
+        // Task 9 - WebSocket Mid-Session Expiry Check
+        if (accessor.getCommand() != null
+                && !StompCommand.CONNECT.equals(accessor.getCommand())
+                && !StompCommand.DISCONNECT.equals(accessor.getCommand())) {
+            Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
+            if (sessionAttributes != null) {
+                Object expiresAtObj = sessionAttributes.get("tokenExpiresAt");
+                if (expiresAtObj instanceof Instant expiresAt) {
+                    if (Instant.now().isAfter(expiresAt)) {
+                        throw new MessageDeliveryException("JWT token has expired mid-session");
+                    }
+                }
+            }
         }
 
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
@@ -82,6 +100,11 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                         );
 
                 accessor.setUser(authentication);
+
+                Date expiration = jwtService.extractExpiration(token);
+                if (expiration != null && accessor.getSessionAttributes() != null) {
+                    accessor.getSessionAttributes().put("tokenExpiresAt", expiration.toInstant());
+                }
 
             } catch (MessageDeliveryException exception) {
                 throw exception;

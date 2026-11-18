@@ -7,6 +7,7 @@ import com.example.blooddonor.dto.MatchStatusRequest;
 import com.example.blooddonor.dto.RequestDonorMatchResponse;
 import com.example.blooddonor.entity.*;
 import com.example.blooddonor.exception.BusinessRuleException;
+import com.example.blooddonor.repository.ContactUnlockAuditLogRepository;
 import com.example.blooddonor.repository.DonorProfileRepository;
 import com.example.blooddonor.repository.EmergencyRequestRepository;
 import com.example.blooddonor.repository.RequestDonorMatchRepository;
@@ -27,6 +28,7 @@ public class DonorMatchingService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final Clock clock;
+    private ContactUnlockAuditLogRepository contactUnlockAuditLogRepository;
 
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
@@ -39,7 +41,17 @@ public class DonorMatchingService {
             RequestDonorMatchRepository requestDonorMatchRepository,
             UserRepository userRepository,
             NotificationService notificationService) {
-        this(donorProfileRepository, emergencyRequestRepository, requestDonorMatchRepository, userRepository, notificationService, Clock.systemDefaultZone());
+        this(donorProfileRepository, emergencyRequestRepository, requestDonorMatchRepository, userRepository, notificationService, Clock.systemDefaultZone(), null);
+    }
+
+    public DonorMatchingService(
+            DonorProfileRepository donorProfileRepository,
+            EmergencyRequestRepository emergencyRequestRepository,
+            RequestDonorMatchRepository requestDonorMatchRepository,
+            UserRepository userRepository,
+            NotificationService notificationService,
+            Clock clock) {
+        this(donorProfileRepository, emergencyRequestRepository, requestDonorMatchRepository, userRepository, notificationService, clock, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -49,7 +61,9 @@ public class DonorMatchingService {
             RequestDonorMatchRepository requestDonorMatchRepository,
             UserRepository userRepository,
             NotificationService notificationService,
-            Clock clock) {
+            Clock clock,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            ContactUnlockAuditLogRepository contactUnlockAuditLogRepository) {
 
         this.donorProfileRepository = donorProfileRepository;
         this.emergencyRequestRepository = emergencyRequestRepository;
@@ -57,6 +71,11 @@ public class DonorMatchingService {
         this.userRepository = userRepository;
         this.notificationService = notificationService;
         this.clock = clock != null ? clock : Clock.systemDefaultZone();
+        this.contactUnlockAuditLogRepository = contactUnlockAuditLogRepository;
+    }
+
+    public void setContactUnlockAuditLogRepository(ContactUnlockAuditLogRepository contactUnlockAuditLogRepository) {
+        this.contactUnlockAuditLogRepository = contactUnlockAuditLogRepository;
     }
 
     public void setCooldownDays(long cooldownDays) {
@@ -686,6 +705,20 @@ public class DonorMatchingService {
                     "Donor has not consented to share contact details");
         }
 
+        // Task 9 - Donor contact unlock audit logging
+        if (contactUnlockAuditLogRepository != null) {
+            String ipAddress = resolveClientIp();
+            ContactUnlockAuditLog auditLog = new ContactUnlockAuditLog(
+                    userId,
+                    match.getDonor().getId(),
+                    match.getId(),
+                    emergencyRequest.getId(),
+                    LocalDateTime.now(clock),
+                    ipAddress
+            );
+            contactUnlockAuditLogRepository.save(auditLog);
+        }
+
         DonorContactResponse response = new DonorContactResponse();
         response.setMatchId(match.getId());
         response.setRequestId(emergencyRequest.getId());
@@ -698,6 +731,25 @@ public class DonorMatchingService {
         response.setContactSharingConsent(true);
 
         return response;
+    }
+
+    private String resolveClientIp() {
+        try {
+            org.springframework.web.context.request.RequestAttributes attribs =
+                    org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            if (attribs instanceof org.springframework.web.context.request.ServletRequestAttributes servletAttribs) {
+                jakarta.servlet.http.HttpServletRequest request = servletAttribs.getRequest();
+                if (request != null) {
+                    String forwarded = request.getHeader("X-Forwarded-For");
+                    if (forwarded != null && !forwarded.isBlank()) {
+                        return forwarded.split(",")[0].trim();
+                    }
+                    return request.getRemoteAddr();
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return "127.0.0.1";
     }
 
     double calculateDistance(

@@ -3,14 +3,9 @@ package com.example.blooddonor.service;
 import com.example.blooddonor.dto.DonorContactResponse;
 import com.example.blooddonor.dto.MatchStatusRequest;
 import com.example.blooddonor.dto.RequestDonorMatchResponse;
-import com.example.blooddonor.entity.DonorProfile;
-import com.example.blooddonor.entity.EmergencyRequest;
-import com.example.blooddonor.entity.HospitalProfile;
-import com.example.blooddonor.entity.MatchStatus;
-import com.example.blooddonor.entity.RequestDonorMatch;
-import com.example.blooddonor.entity.RequestStatus;
-import com.example.blooddonor.entity.User;
+import com.example.blooddonor.entity.*;
 import com.example.blooddonor.exception.BusinessRuleException;
+import com.example.blooddonor.repository.ContactUnlockAuditLogRepository;
 import com.example.blooddonor.repository.DonorProfileRepository;
 import com.example.blooddonor.repository.EmergencyRequestRepository;
 import com.example.blooddonor.repository.RequestDonorMatchRepository;
@@ -23,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -1102,6 +1099,59 @@ public class DonorMatchingServiceTest {
         assertEquals("jane@donor.org", contact.getEmail());
         assertEquals(MatchStatus.ACCEPTED, contact.getStatus());
         assertTrue(contact.getContactSharingConsent());
+    }
+
+    @Test
+    void shouldAuditLogWhenDonorContactIsUnlocked() {
+        ContactUnlockAuditLogRepository auditRepo = mock(ContactUnlockAuditLogRepository.class);
+        donorMatchingService.setContactUnlockAuditLogRepository(auditRepo);
+
+        User hospitalUser = new User();
+        hospitalUser.setId(8L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setUser(hospitalUser);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(1L);
+        request.setStatus(RequestStatus.ACTIVE);
+        request.setHospital(hospital);
+
+        User donorUser = new User();
+        donorUser.setId(9L);
+        donorUser.setName("Jane Donor");
+        donorUser.setEmail("jane@donor.org");
+
+        DonorProfile donor = new DonorProfile();
+        donor.setId(2L);
+        donor.setUser(donorUser);
+        donor.setBloodGroup("O-");
+        donor.setContactNumber("+1-555-0144");
+
+        RequestDonorMatch match = new RequestDonorMatch();
+        match.setId(101L);
+        match.setEmergencyRequest(request);
+        match.setDonor(donor);
+        match.setStatus(MatchStatus.ACCEPTED);
+        match.setContactSharingConsent(true);
+
+        when(emergencyRequestRepository.findById(1L)).thenReturn(Optional.of(request));
+        when(requestDonorMatchRepository.findById(101L)).thenReturn(Optional.of(match));
+
+        DonorContactResponse contact = donorMatchingService.getDonorContact(1L, 101L, 8L);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(contact);
+
+        org.mockito.ArgumentCaptor<ContactUnlockAuditLog> captor = org.mockito.ArgumentCaptor.forClass(ContactUnlockAuditLog.class);
+        verify(auditRepo, times(1)).save(captor.capture());
+
+        ContactUnlockAuditLog logged = captor.getValue();
+        assertEquals(8L, logged.getHospitalUserId());
+        assertEquals(2L, logged.getDonorId());
+        assertEquals(101L, logged.getMatchId());
+        assertEquals(1L, logged.getEmergencyRequestId());
+        org.junit.jupiter.api.Assertions.assertNotNull(logged.getUnlockedAt());
+        org.junit.jupiter.api.Assertions.assertNotNull(logged.getIpAddress());
     }
 
     // =========================================================
