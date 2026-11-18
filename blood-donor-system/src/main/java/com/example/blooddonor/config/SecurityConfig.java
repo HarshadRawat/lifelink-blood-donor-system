@@ -53,7 +53,7 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
-        configuration.setExposedHeaders(List.of("Authorization", "Retry-After"));
+        configuration.setExposedHeaders(List.of("Authorization", "Retry-After", "X-Correlation-ID"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
@@ -88,6 +88,12 @@ public class SecurityConfig {
                                 "/ws/**",
                                 "/ws"
                         ).permitAll()
+                        .requestMatchers(
+                                "/actuator/prometheus",
+                                "/actuator/prometheus/**",
+                                "/actuator/metrics",
+                                "/actuator/metrics/**"
+                        ).hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception
