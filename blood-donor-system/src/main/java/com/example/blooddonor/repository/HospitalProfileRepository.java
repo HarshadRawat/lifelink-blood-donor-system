@@ -10,4 +10,9 @@ public interface HospitalProfileRepository
         extends JpaRepository<HospitalProfile, Long> {
 
     Optional<HospitalProfile> findByUser(User user);
+
+    org.springframework.data.domain.Page<HospitalProfile> findByVerified(
+            Boolean verified,
+            org.springframework.data.domain.Pageable pageable
+    );
 }

@@ -33,4 +33,7 @@ public class HospitalProfile {
     private Double longitude;
 
     private String contactNumber;
+
+    @Column(name = "verified", nullable = false)
+    private Boolean verified = false;
 }
