@@ -86,6 +86,9 @@ public class EmergencyRequestService {
                 LocalDateTime.now()
         );
 
+        emergencyRequest.setCurrentRadiusKm(20.0);
+        emergencyRequest.setExpiresAt(emergencyRequest.getCreatedAt().plusHours(24));
+
         emergencyRequest.setHospital(hospital);
 
         EmergencyRequest savedRequest =
@@ -129,6 +132,12 @@ public class EmergencyRequestService {
         );
         response.setHospitalName(
                 savedRequest.getHospital().getHospitalName()
+        );
+        response.setCurrentRadiusKm(
+                savedRequest.getCurrentRadiusKm() != null ? savedRequest.getCurrentRadiusKm() : 20.0
+        );
+        response.setExpiresAt(
+                savedRequest.getExpiresAt()
         );
 
         return response;
@@ -191,6 +200,8 @@ public class EmergencyRequestService {
             response.setCreatedAt(request.getCreatedAt());
             response.setHospitalId(request.getHospital().getId());
             response.setHospitalName(request.getHospital().getHospitalName());
+            response.setCurrentRadiusKm(request.getCurrentRadiusKm() != null ? request.getCurrentRadiusKm() : 20.0);
+            response.setExpiresAt(request.getExpiresAt());
 
             return response;
         });
