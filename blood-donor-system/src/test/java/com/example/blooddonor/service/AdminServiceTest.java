@@ -3,6 +3,7 @@ package com.example.blooddonor.service;
 import com.example.blooddonor.dto.AdminDashboardMetricsResponse;
 import com.example.blooddonor.dto.AdminEmergencyRequestSummary;
 import com.example.blooddonor.dto.AdminUserSummary;
+import com.example.blooddonor.dto.HospitalProfileResponse;
 import com.example.blooddonor.entity.*;
 import com.example.blooddonor.repository.DonorProfileRepository;
 import com.example.blooddonor.repository.EmergencyRequestRepository;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -127,5 +129,41 @@ class AdminServiceTest {
         assertEquals("Alice", item.getName());
         assertEquals("alice@test.com", item.getEmail());
         assertEquals(Role.DONOR, item.getRole());
+    }
+
+    @Test
+    void getPendingHospitals_shouldReturnOnlyUnverifiedHospitals() {
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(10L);
+        hospital.setHospitalName("Metro Health");
+        hospital.setVerified(false);
+
+        PageRequest pageable = PageRequest.of(0, 10);
+        when(hospitalProfileRepository.findByVerified(false, pageable))
+                .thenReturn(new PageImpl<>(List.of(hospital)));
+
+        Page<HospitalProfileResponse> page = adminService.getPendingHospitals(pageable);
+
+        assertEquals(1, page.getTotalElements());
+        assertEquals(10L, page.getContent().get(0).getId());
+        assertEquals("Metro Health", page.getContent().get(0).getHospitalName());
+        assertFalse(page.getContent().get(0).getVerified());
+    }
+
+    @Test
+    void verifyHospital_shouldUpdateVerificationStatus() {
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(10L);
+        hospital.setHospitalName("Metro Health");
+        hospital.setVerified(false);
+
+        when(hospitalProfileRepository.findById(10L)).thenReturn(Optional.of(hospital));
+        when(hospitalProfileRepository.save(any(HospitalProfile.class))).thenAnswer(i -> i.getArgument(0));
+
+        HospitalProfileResponse response = adminService.verifyHospital(10L, true);
+
+        assertNotNull(response);
+        assertTrue(response.getVerified());
+        verify(hospitalProfileRepository).save(hospital);
     }
 }

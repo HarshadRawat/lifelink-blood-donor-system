@@ -3,7 +3,9 @@ package com.example.blooddonor.service;
 import com.example.blooddonor.dto.AdminDashboardMetricsResponse;
 import com.example.blooddonor.dto.AdminEmergencyRequestSummary;
 import com.example.blooddonor.dto.AdminUserSummary;
+import com.example.blooddonor.dto.HospitalProfileResponse;
 import com.example.blooddonor.entity.EmergencyRequest;
+import com.example.blooddonor.entity.HospitalProfile;
 import com.example.blooddonor.entity.MatchStatus;
 import com.example.blooddonor.entity.RequestStatus;
 import com.example.blooddonor.entity.Role;
@@ -13,6 +15,7 @@ import com.example.blooddonor.repository.EmergencyRequestRepository;
 import com.example.blooddonor.repository.HospitalProfileRepository;
 import com.example.blooddonor.repository.RequestDonorMatchRepository;
 import com.example.blooddonor.repository.UserRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -94,5 +97,37 @@ public class AdminService {
                 .role(user.getRole())
                 .build()
         );
+    }
+
+    public Page<HospitalProfileResponse> getPendingHospitals(Pageable pageable) {
+        Page<HospitalProfile> pending = hospitalProfileRepository.findByVerified(false, pageable);
+        return pending.map(this::mapToHospitalProfileResponse);
+    }
+
+    @Transactional
+    @CacheEvict(value = "hospital_profiles", allEntries = true)
+    public HospitalProfileResponse verifyHospital(Long hospitalId, boolean verified) {
+        HospitalProfile profile = hospitalProfileRepository.findById(hospitalId)
+                .orElseThrow(() -> new IllegalArgumentException("Hospital profile not found with ID: " + hospitalId));
+        profile.setVerified(verified);
+        HospitalProfile saved = hospitalProfileRepository.save(profile);
+        return mapToHospitalProfileResponse(saved);
+    }
+
+    private HospitalProfileResponse mapToHospitalProfileResponse(HospitalProfile profile) {
+        HospitalProfileResponse response = new HospitalProfileResponse();
+        response.setId(profile.getId());
+        if (profile.getUser() != null) {
+            response.setUserId(profile.getUser().getId());
+        }
+        response.setHospitalName(profile.getHospitalName());
+        response.setRegistrationNumber(profile.getRegistrationNumber());
+        response.setAddress(profile.getAddress());
+        response.setCity(profile.getCity());
+        response.setLatitude(profile.getLatitude());
+        response.setLongitude(profile.getLongitude());
+        response.setContactNumber(profile.getContactNumber());
+        response.setVerified(profile.getVerified());
+        return response;
     }
 }

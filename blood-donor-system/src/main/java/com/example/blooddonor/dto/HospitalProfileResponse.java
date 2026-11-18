@@ -24,4 +24,5 @@ public class HospitalProfileResponse implements Serializable {
     private Double longitude;
 
     private String contactNumber;
+    private Boolean verified;
 }

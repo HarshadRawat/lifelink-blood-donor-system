@@ -3,18 +3,18 @@ package com.example.blooddonor.controller;
 import com.example.blooddonor.dto.AdminDashboardMetricsResponse;
 import com.example.blooddonor.dto.AdminEmergencyRequestSummary;
 import com.example.blooddonor.dto.AdminUserSummary;
+import com.example.blooddonor.dto.HospitalProfileResponse;
+import com.example.blooddonor.dto.HospitalVerificationRequest;
 import com.example.blooddonor.service.AdminService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -60,5 +60,30 @@ public class AdminController {
         return adminService.getUsers(
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"))
         );
+    }
+
+    @Operation(summary = "Get paginated pending (unverified) hospitals")
+    @ApiResponse(responseCode = "200", description = "Pending hospitals list retrieved successfully")
+    @ApiResponse(responseCode = "403", description = "Forbidden for non-admin accounts")
+    @GetMapping("/hospitals/pending")
+    public Page<HospitalProfileResponse> getPendingHospitals(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return adminService.getPendingHospitals(
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"))
+        );
+    }
+
+    @Operation(summary = "Verify or reject a hospital registration")
+    @ApiResponse(responseCode = "200", description = "Hospital verification status updated successfully")
+    @ApiResponse(responseCode = "403", description = "Forbidden for non-admin accounts")
+    @ApiResponse(responseCode = "400", description = "Invalid request payload or hospital not found")
+    @PatchMapping("/hospitals/{id}/verify")
+    public HospitalProfileResponse verifyHospital(
+            @PathVariable Long id,
+            @Valid @RequestBody HospitalVerificationRequest request
+    ) {
+        return adminService.verifyHospital(id, request.getVerified());
     }
 }

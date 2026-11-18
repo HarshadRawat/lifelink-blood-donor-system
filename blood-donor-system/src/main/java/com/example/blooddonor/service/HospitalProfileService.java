@@ -68,6 +68,7 @@ public class HospitalProfileService {
         response.setLatitude(savedProfile.getLatitude());
         response.setLongitude(savedProfile.getLongitude());
         response.setContactNumber(savedProfile.getContactNumber());
+        response.setVerified(savedProfile.getVerified());
 
         return response;
     }
@@ -98,6 +99,7 @@ public class HospitalProfileService {
         response.setLatitude(profile.getLatitude());
         response.setLongitude(profile.getLongitude());
         response.setContactNumber(profile.getContactNumber());
+        response.setVerified(profile.getVerified());
 
         return response;
     }
@@ -143,6 +145,7 @@ public class HospitalProfileService {
         response.setLatitude(updatedProfile.getLatitude());
         response.setLongitude(updatedProfile.getLongitude());
         response.setContactNumber(updatedProfile.getContactNumber());
+        response.setVerified(updatedProfile.getVerified());
 
         return response;
     }

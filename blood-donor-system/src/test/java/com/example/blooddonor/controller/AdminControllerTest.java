@@ -3,6 +3,7 @@ package com.example.blooddonor.controller;
 import com.example.blooddonor.dto.AdminDashboardMetricsResponse;
 import com.example.blooddonor.dto.AdminEmergencyRequestSummary;
 import com.example.blooddonor.dto.AdminUserSummary;
+import com.example.blooddonor.dto.HospitalProfileResponse;
 import com.example.blooddonor.entity.RequestStatus;
 import com.example.blooddonor.entity.Role;
 import com.example.blooddonor.entity.Urgency;
@@ -14,6 +15,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -21,8 +23,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -106,5 +110,41 @@ class AdminControllerTest {
                 .andExpect(jsonPath("$.content[0].name").value("John Donor"))
                 .andExpect(jsonPath("$.content[0].email").value("john@donor.com"))
                 .andExpect(jsonPath("$.content[0].role").value("DONOR"));
+    }
+
+    @Test
+    void getPendingHospitals_shouldReturn200_andPage() throws Exception {
+        HospitalProfileResponse hospital = new HospitalProfileResponse();
+        hospital.setId(5L);
+        hospital.setHospitalName("St. Jude Clinic");
+        hospital.setRegistrationNumber("REG-12345");
+        hospital.setVerified(false);
+
+        when(adminService.getPendingHospitals(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(hospital)));
+
+        mockMvc.perform(get("/api/admin/hospitals/pending?page=0&size=10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(5))
+                .andExpect(jsonPath("$.content[0].hospitalName").value("St. Jude Clinic"))
+                .andExpect(jsonPath("$.content[0].verified").value(false));
+    }
+
+    @Test
+    void verifyHospital_shouldReturn200_andUpdatedProfile() throws Exception {
+        HospitalProfileResponse updated = new HospitalProfileResponse();
+        updated.setId(5L);
+        updated.setHospitalName("St. Jude Clinic");
+        updated.setVerified(true);
+
+        when(adminService.verifyHospital(eq(5L), eq(true)))
+                .thenReturn(updated);
+
+        mockMvc.perform(patch("/api/admin/hospitals/5/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"verified\": true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(5))
+                .andExpect(jsonPath("$.verified").value(true));
     }
 }

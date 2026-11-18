@@ -63,6 +63,12 @@ public class EmergencyRequestService {
                                 new RuntimeException(
                                         "Hospital profile not found"));
 
+        // Hospital verification check (Task 9 - Anti-fraud protection)
+        if (!Boolean.TRUE.equals(hospital.getVerified())) {
+            throw new BusinessRuleException(
+                    "Hospital account has not been verified by an administrator. Emergency requests cannot be created until verified.");
+        }
+
         EmergencyRequest emergencyRequest =
                 new EmergencyRequest();
 
@@ -221,6 +227,12 @@ public class EmergencyRequestService {
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Hospital profile not found"));
+
+        // Hospital verification check (Task 9 - Anti-fraud protection)
+        if (!Boolean.TRUE.equals(hospital.getVerified())) {
+            throw new BusinessRuleException(
+                    "Hospital account has not been verified by an administrator. Emergency requests cannot be created until verified.");
+        }
 
         EmergencyRequest emergencyRequest =
                 emergencyRequestRepository.findById(requestId)

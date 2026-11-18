@@ -8,6 +8,7 @@ import com.example.blooddonor.entity.HospitalProfile;
 import com.example.blooddonor.entity.RequestStatus;
 import com.example.blooddonor.entity.Urgency;
 import com.example.blooddonor.entity.User;
+import com.example.blooddonor.exception.BusinessRuleException;
 import com.example.blooddonor.repository.EmergencyRequestRepository;
 import com.example.blooddonor.repository.HospitalProfileRepository;
 import com.example.blooddonor.repository.RequestDonorMatchRepository;
@@ -27,6 +28,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -68,6 +70,7 @@ class EmergencyRequestServiceTest {
         HospitalProfile hospital = new HospitalProfile();
         hospital.setId(1L);
         hospital.setUser(hospitalUser);
+        hospital.setVerified(true);
 
 
         // Request DTO
@@ -163,6 +166,34 @@ class EmergencyRequestServiceTest {
 
         verify(emergencyRequestRepository, never())
                 .save(any(EmergencyRequest.class));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenHospitalNotVerified() {
+
+        User hospitalUser = new User();
+        hospitalUser.setId(1L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(1L);
+        hospital.setUser(hospitalUser);
+        hospital.setVerified(false);
+
+        EmergencyRequestRequest request = new EmergencyRequestRequest();
+        request.setBloodGroup("O+");
+        request.setUnitsRequired(2);
+        request.setUrgency(Urgency.HIGH);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(hospitalUser));
+        when(hospitalProfileRepository.findByUser(hospitalUser)).thenReturn(Optional.of(hospital));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> emergencyRequestService.createRequest(request, 1L)
+        );
+
+        assertTrue(exception.getMessage().contains("Hospital account has not been verified"));
+        verify(emergencyRequestRepository, never()).save(any(EmergencyRequest.class));
     }
 
     @Test
