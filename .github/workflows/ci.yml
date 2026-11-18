@@ -119,11 +119,29 @@ jobs:
         run: docker compose build
 
   # ------------------------------------------------------------------
-  # 4. Container Publishing to GitHub Container Registry (ghcr.io)
+  # 4. Security Vulnerability Scanning (Trivy)
+  # ------------------------------------------------------------------
+  security-scan:
+    name: Security Vulnerability Scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy Vulnerability Scanner (Repository Filesystem)
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+
+  # ------------------------------------------------------------------
+  # 5. Container Publishing to GitHub Container Registry (ghcr.io)
   # ------------------------------------------------------------------
   publish:
     name: Publish Container Images to GHCR
-    needs: [docker-validation]
+    needs: [docker-validation, security-scan]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
