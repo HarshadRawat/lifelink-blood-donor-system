@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "request_donor_matches")
+@Table(name = "request_donor_matches", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_request_donor", columnNames = {"request_id", "donor_id"})
+})
 public class RequestDonorMatch {
 
     @Id
