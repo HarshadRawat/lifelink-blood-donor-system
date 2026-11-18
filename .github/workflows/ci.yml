@@ -130,11 +130,14 @@ jobs:
 
       - name: Run Trivy Vulnerability Scanner (Repository Filesystem)
         uses: aquasecurity/trivy-action@0.29.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           scan-type: 'fs'
           ignore-unfixed: true
           format: 'table'
           severity: 'CRITICAL,HIGH'
+          exit-code: '0'
 
   # ------------------------------------------------------------------
   # 5. Container Publishing to GitHub Container Registry (ghcr.io)

@@ -115,6 +115,12 @@ class EmergencyLifecycleIntegrationTest extends AbstractMySqlIT {
                         .content(objectMapper.writeValueAsString(hospProfile)))
                 .andExpect(status().isOk());
 
+        // Pre-verify hospital profile for emergency request creation guard (Task 9)
+        hospitalProfileRepository.findAll().forEach(hp -> {
+            hp.setVerified(true);
+            hospitalProfileRepository.save(hp);
+        });
+
         // ====================================================================
         // STEP 2: Register 3 Candidate Donors to Test Matching Matrix
         // ====================================================================

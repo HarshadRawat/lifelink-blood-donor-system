@@ -52,6 +52,7 @@ class WebSocketAuthInterceptorTest {
         when(jwtService.extractExpiration(token)).thenReturn(expiresAt);
 
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
+        accessor.setLeaveMutable(true);
         accessor.addNativeHeader("Authorization", "Bearer " + token);
         Map<String, Object> sessionAttributes = new HashMap<>();
         accessor.setSessionAttributes(sessionAttributes);
@@ -89,8 +90,13 @@ class WebSocketAuthInterceptorTest {
     @DisplayName("Subsequent frame before expiration should be permitted")
     void nonConnectFrame_beforeExpiry_shouldPass() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SUBSCRIBE);
+        accessor.setLeaveMutable(true);
         accessor.setDestination("/user/queue/notifications");
-        accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("42", null));
+        accessor.setUser(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                "42",
+                null,
+                java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DONOR"))
+        ));
 
         Map<String, Object> sessionAttributes = new HashMap<>();
         sessionAttributes.put("tokenExpiresAt", Instant.now().plus(10, ChronoUnit.MINUTES));
@@ -106,6 +112,7 @@ class WebSocketAuthInterceptorTest {
     @DisplayName("Subsequent frame mid-session after expiration should throw MessageDeliveryException forcing reconnect")
     void nonConnectFrame_afterExpiry_shouldThrowMidSessionExpiryException() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.SEND);
+        accessor.setLeaveMutable(true);
         accessor.setDestination("/app/ping");
 
         Map<String, Object> sessionAttributes = new HashMap<>();
