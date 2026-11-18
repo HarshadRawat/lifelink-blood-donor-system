@@ -32,4 +32,6 @@ public class EmergencyRequestResponse {
     private Double currentRadiusKm;
 
     private LocalDateTime expiresAt;
+
+    private Integer unitsFulfilled;
 }

@@ -5,10 +5,11 @@
 -- cooldown enforcement, and automatic stale request expiry (Task 8).
 -- ====================================================================
 
--- 1. Add current_radius_km and expires_at to emergency_requests
+-- 1. Add current_radius_km, expires_at, and units_fulfilled to emergency_requests
 ALTER TABLE emergency_requests
     ADD COLUMN current_radius_km DOUBLE NOT NULL DEFAULT 20.0,
-    ADD COLUMN expires_at DATETIME(6) DEFAULT NULL;
+    ADD COLUMN expires_at DATETIME(6) DEFAULT NULL,
+    ADD COLUMN units_fulfilled INT NOT NULL DEFAULT 0;
 
 -- 2. Add last_donation_date to donor_profiles
 ALTER TABLE donor_profiles

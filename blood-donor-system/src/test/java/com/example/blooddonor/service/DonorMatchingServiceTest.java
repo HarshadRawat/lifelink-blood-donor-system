@@ -532,13 +532,6 @@ public class DonorMatchingServiceTest {
                 .thenReturn(match);
 
         when(requestDonorMatchRepository
-                .countByEmergencyRequestAndStatus(
-                        request,
-                        MatchStatus.COMPLETED
-                ))
-                .thenReturn(1L);
-
-        when(requestDonorMatchRepository
                 .findByEmergencyRequest(request))
                 .thenReturn(List.of(match));
 
@@ -1765,9 +1758,6 @@ public class DonorMatchingServiceTest {
 
         when(requestDonorMatchRepository.findById(301L)).thenReturn(Optional.of(match));
         when(requestDonorMatchRepository.save(match)).thenReturn(match);
-        // Current completed is 0, becomes 1 after this completion
-        when(requestDonorMatchRepository.countByEmergencyRequestAndStatus(request, MatchStatus.COMPLETED))
-                .thenReturn(1L);
 
         RequestDonorMatchResponse response = donorMatchingService.completeMatch(301L, 100L);
 

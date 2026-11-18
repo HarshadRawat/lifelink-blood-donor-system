@@ -106,6 +106,7 @@ class EmergencyConcurrency32ThreadIT extends AbstractMySqlIT {
         request.setUrgency(Urgency.CRITICAL);
         request.setStatus(RequestStatus.ACTIVE);
         request.setCurrentRadiusKm(20.0);
+        request.setUnitsFulfilled(0);
         request.setCreatedAt(LocalDateTime.now());
         request = emergencyRequestRepository.save(request);
 

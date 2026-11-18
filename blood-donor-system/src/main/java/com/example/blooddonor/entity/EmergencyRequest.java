@@ -36,6 +36,9 @@ public class EmergencyRequest {
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
 
+    @Column(name = "units_fulfilled", nullable = false)
+    private Integer unitsFulfilled = 0;
+
     @Version
     private Long version;
 

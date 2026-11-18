@@ -28,6 +28,9 @@ public class DonorMatchingService {
     private final NotificationService notificationService;
     private final Clock clock;
 
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
+
     private long cooldownDays = 90;
 
     public DonorMatchingService(
@@ -400,7 +403,17 @@ public class DonorMatchingService {
         EmergencyRequest emergencyRequest = emergencyRequestRepository.findByIdWithPessimisticLock(reqId)
                 .orElse(match.getEmergencyRequest());
 
-        if (emergencyRequest.getStatus() == RequestStatus.FULFILLED) {
+        if (entityManager != null) {
+            try {
+                entityManager.refresh(emergencyRequest, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            } catch (Exception ignored) {
+            }
+        }
+
+        int fulfilled = emergencyRequest.getUnitsFulfilled() != null ? emergencyRequest.getUnitsFulfilled() : 0;
+        int required = emergencyRequest.getUnitsRequired() != null ? emergencyRequest.getUnitsRequired() : 1;
+
+        if (emergencyRequest.getStatus() == RequestStatus.FULFILLED || fulfilled >= required) {
             throw new BusinessRuleException("Emergency request is already fully fulfilled");
         }
 
@@ -415,19 +428,11 @@ public class DonorMatchingService {
         RequestDonorMatch updatedMatch =
                 requestDonorMatchRepository.save(match);
 
-        // 7. Check whether required units are fulfilled and guard against concurrent over-fulfillment
-        long completedUnits = requestDonorMatchRepository
-                .countByEmergencyRequestAndStatus(
-                        emergencyRequest,
-                        MatchStatus.COMPLETED
-                );
+        // 7. Increment fulfilled units and check whether quota is met
+        fulfilled++;
+        emergencyRequest.setUnitsFulfilled(fulfilled);
 
-        if (completedUnits > emergencyRequest.getUnitsRequired()) {
-            throw new BusinessRuleException("Emergency request is already fully fulfilled");
-        }
-
-        if (completedUnits >=
-                emergencyRequest.getUnitsRequired()) {
+        if (fulfilled >= required) {
 
             // Mark the emergency request as fulfilled
             emergencyRequest.setStatus(
@@ -460,6 +465,10 @@ public class DonorMatchingService {
 
             requestDonorMatchRepository.saveAll(
                     remainingMatches
+            );
+        } else {
+            emergencyRequestRepository.save(
+                    emergencyRequest
             );
         }
 
