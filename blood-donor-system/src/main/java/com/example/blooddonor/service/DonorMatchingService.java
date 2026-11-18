@@ -153,20 +153,28 @@ public class DonorMatchingService {
                 })
                 .toList();
 
-        // 5. Save matches
-        List<RequestDonorMatch> savedMatches =
-                requestDonorMatchRepository.saveAll(matches);
-
-        // 6. Create notification for every matched donor
-        savedMatches.forEach(match -> {
-
-            notificationService.createMatchFoundNotification(
-                    match.getDonor().getUser(),
-                    emergencyRequest
-            );
-        });
+        // 5. Save matches with idempotency guard (Task 7)
+        List<RequestDonorMatch> savedMatches;
+        try {
+            savedMatches = requestDonorMatchRepository.saveAll(matches);
+            // 6. Create notification for newly matched donors
+            if (savedMatches != null) {
+                savedMatches.forEach(match -> {
+                    notificationService.createMatchFoundNotification(
+                            match.getDonor().getUser(),
+                            emergencyRequest
+                    );
+                });
+            }
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            // Idempotent safeguard: duplicate matches prevented by uk_request_donor unique constraint
+            savedMatches = requestDonorMatchRepository.findByEmergencyRequest(emergencyRequest);
+        }
 
         // 7. Convert entities to DTOs
+        if (savedMatches == null) {
+            return List.of();
+        }
         return savedMatches.stream()
                 .map(match -> {
 

@@ -22,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -1524,5 +1525,60 @@ public class DonorMatchingServiceTest {
         // 3. Known distance: Bangalore city center to Whitefield is ~16.8 km
         assertTrue(distForward >= 16.5 && distForward <= 17.2,
                 "Distance should be approximately 16.8 km, got: " + distForward);
+    }
+
+    @Test
+    void shouldHandleDuplicateMatchGracefullyAndIdempotentlyWhenDataIntegrityViolationOccurs() {
+        User hospitalUser = new User();
+        hospitalUser.setId(8L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(3L);
+        hospital.setUser(hospitalUser);
+        hospital.setLatitude(12.9698);
+        hospital.setLongitude(77.7499);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(10L);
+        request.setBloodGroup("O+");
+        request.setUnitsRequired(1);
+        request.setStatus(RequestStatus.ACTIVE);
+        request.setHospital(hospital);
+
+        User donorUser = new User();
+        donorUser.setId(9L);
+        donorUser.setName("Duplicate Candidate Donor");
+
+        DonorProfile donor = new DonorProfile();
+        donor.setId(5L);
+        donor.setUser(donorUser);
+        donor.setBloodGroup("O+");
+        donor.setAvailable(true);
+        donor.setLatitude(12.9700);
+        donor.setLongitude(77.7500);
+
+        when(emergencyRequestRepository.findById(10L)).thenReturn(Optional.of(request));
+        when(donorProfileRepository.findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+                .thenReturn(List.of(donor));
+        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, donor)).thenReturn(false);
+
+        // Simulate concurrent duplicate insert throwing DataIntegrityViolationException on uk_request_donor
+        when(requestDonorMatchRepository.saveAll(anyList()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate entry for uk_request_donor"));
+
+        RequestDonorMatch existingMatch = new RequestDonorMatch();
+        existingMatch.setId(99L);
+        existingMatch.setEmergencyRequest(request);
+        existingMatch.setDonor(donor);
+        existingMatch.setStatus(MatchStatus.MATCHED);
+
+        when(requestDonorMatchRepository.findByEmergencyRequest(request)).thenReturn(List.of(existingMatch));
+
+        List<RequestDonorMatchResponse> responses = donorMatchingService.findMatches(10L);
+
+        assertEquals(1, responses.size());
+        assertEquals(99L, responses.get(0).getId());
+        // Verify notificationService was NOT invoked for duplicate match
+        verify(notificationService, never()).createMatchFoundNotification(any(), any());
     }
 }
