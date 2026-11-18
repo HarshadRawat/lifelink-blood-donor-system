@@ -53,4 +53,35 @@ public class AuthController {
 
         return userService.login(request);
     }
+
+    @Operation(
+            summary = "Refresh access token",
+            description = "Exchanges a valid refresh token for a new short-lived access token and rotated refresh token."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Token refreshed successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request payload"),
+            @ApiResponse(responseCode = "401", description = "Expired or compromised refresh token")
+    })
+    @PostMapping("/refresh")
+    public LoginResponse refresh(
+            @Valid @RequestBody com.example.blooddonor.dto.RefreshTokenRequest request) {
+
+        return userService.refresh(request);
+    }
+
+    @Operation(
+            summary = "Logout user",
+            description = "Revokes the active refresh token and invalidates the session."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Logged out successfully")
+    })
+    @PostMapping("/logout")
+    public org.springframework.http.ResponseEntity<java.util.Map<String, String>> logout(
+            @RequestBody(required = false) com.example.blooddonor.dto.RefreshTokenRequest request) {
+
+        userService.logout(request);
+        return org.springframework.http.ResponseEntity.ok(java.util.Map.of("message", "Logged out successfully"));
+    }
 }

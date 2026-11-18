@@ -15,12 +15,12 @@ public class JwtService {
     private final long expirationMs;
 
     public JwtService() {
-        this("my-super-secret-key-for-blood-donor-system-12345", 86400000L);
+        this("my-super-secret-key-for-blood-donor-system-12345", 900000L);
     }
 
     public JwtService(
             @Value("${jwt.secret:my-super-secret-key-for-blood-donor-system-12345}") String secret,
-            @Value("${jwt.expiration-ms:86400000}") long expirationMs) {
+            @Value("${jwt.expiration-ms:900000}") long expirationMs) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes());
         this.expirationMs = expirationMs;
     }
@@ -84,6 +84,16 @@ public class JwtService {
                 .parseSignedClaims(token)
                 .getPayload()
                 .get("role", String.class);
+    }
+
+    public Date extractExpiration(String token) {
+
+        return Jwts.parser()
+                .verifyWith(secretKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getExpiration();
     }
 
     // Generate an expired JWT for testing purposes

@@ -6,6 +6,7 @@ import com.example.blooddonor.dto.RegisterRequest;
 import com.example.blooddonor.dto.UserResponse;
 import com.example.blooddonor.entity.Role;
 import com.example.blooddonor.entity.User;
+import com.example.blooddonor.exception.BusinessRuleException;
 import com.example.blooddonor.exception.InvalidCredentialsException;
 import com.example.blooddonor.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -324,5 +325,82 @@ public class UserServiceTest {
 
         verify(jwtService, never())
                 .generateToken(anyLong(), anyString());
+    }
+
+    @Test
+    void shouldLockAccountAfterFiveConsecutiveFailedLogins() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("lockme@gmail.com");
+        request.setPassword("WrongPassword");
+
+        User user = new User();
+        user.setId(10L);
+        user.setEmail("lockme@gmail.com");
+        user.setPassword("encodedPassword");
+        user.setRole(Role.DONOR);
+        user.setFailedLoginAttempts(4); // 4 prior failures
+
+        when(userRepository.findByEmail("lockme@gmail.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("WrongPassword", "encodedPassword")).thenReturn(false);
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> userService.login(request)
+        );
+
+        assertEquals(5, user.getFailedLoginAttempts());
+        org.junit.jupiter.api.Assertions.assertNotNull(user.getAccountLockedUntil());
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("Account is locked"));
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void shouldRejectLoginWhenAccountIsCurrentlyLocked() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("locked@gmail.com");
+        request.setPassword("Password123");
+
+        User user = new User();
+        user.setId(11L);
+        user.setEmail("locked@gmail.com");
+        user.setPassword("encodedPassword");
+        user.setRole(Role.DONOR);
+        user.setAccountLockedUntil(java.time.LocalDateTime.now().plusMinutes(10));
+
+        when(userRepository.findByEmail("locked@gmail.com")).thenReturn(Optional.of(user));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> userService.login(request)
+        );
+
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("Account is locked"));
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+    }
+
+    @Test
+    void shouldResetFailedLoginAttemptsOnSuccessfulLogin() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("reset@gmail.com");
+        request.setPassword("GoodPassword123");
+
+        User user = new User();
+        user.setId(12L);
+        user.setName("Reset User");
+        user.setEmail("reset@gmail.com");
+        user.setPassword("encodedPassword");
+        user.setRole(Role.DONOR);
+        user.setFailedLoginAttempts(3);
+
+        when(userRepository.findByEmail("reset@gmail.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("GoodPassword123", "encodedPassword")).thenReturn(true);
+        when(jwtService.generateToken(12L, "DONOR")).thenReturn("valid-jwt");
+
+        LoginResponse response = userService.login(request);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(response);
+        assertEquals(0, user.getFailedLoginAttempts());
+        org.junit.jupiter.api.Assertions.assertNull(user.getAccountLockedUntil());
+        verify(userRepository).save(user);
     }
 }

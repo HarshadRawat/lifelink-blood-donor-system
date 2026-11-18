@@ -2,6 +2,7 @@ package com.example.blooddonor.controller;
 
 import com.example.blooddonor.dto.LoginRequest;
 import com.example.blooddonor.dto.LoginResponse;
+import com.example.blooddonor.dto.RefreshTokenRequest;
 import com.example.blooddonor.dto.RegisterRequest;
 import com.example.blooddonor.dto.UserResponse;
 import com.example.blooddonor.exception.AdminRegistrationNotAllowedException;
@@ -312,5 +313,46 @@ class AuthControllerTest {
                                 )
                 )
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void refresh_shouldReturn200_whenValidRefreshToken() throws Exception {
+        LoginResponse response = new LoginResponse();
+        response.setToken("new-access-token");
+        response.setRefreshToken("new-rotated-refresh-token");
+
+        when(userService.refresh(any(RefreshTokenRequest.class))).thenReturn(response);
+
+        mockMvc.perform(
+                post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\": \"valid-refresh-token\"}")
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value("new-access-token"))
+                .andExpect(jsonPath("$.refreshToken").value("new-rotated-refresh-token"));
+    }
+
+    @Test
+    void refresh_shouldReturn400_whenMissingRefreshToken() throws Exception {
+        mockMvc.perform(
+                post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\": \"\"}")
+        )
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void logout_shouldReturn200_andRevokeToken() throws Exception {
+        mockMvc.perform(
+                post("/api/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\": \"some-token\"}")
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Logged out successfully"));
+
+        org.mockito.Mockito.verify(userService).logout(any(RefreshTokenRequest.class));
     }
 }
