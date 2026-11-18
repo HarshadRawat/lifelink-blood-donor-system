@@ -94,6 +94,7 @@ public class DemoDataInitializer implements CommandLineRunner {
         hospProfile.setLatitude(12.9352);
         hospProfile.setLongitude(77.6245);
         hospProfile.setContactNumber("+91-8012345678");
+        hospProfile.setVerified(true);
         hospProfile = hospitalProfileRepository.save(hospProfile);
 
         // ====================================================================
