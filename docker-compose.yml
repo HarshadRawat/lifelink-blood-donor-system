@@ -61,7 +61,31 @@ services:
       - lifelink-network
 
   # ------------------------------------------------------------------
-  # 3. Spring Boot Backend Service (REST API & WebSockets)
+  # 3. RabbitMQ 3 Message Broker Service with Management Plugin (Task 7)
+  # ------------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: lifelink-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - lifelink-network
+
+  # ------------------------------------------------------------------
+  # 4. Spring Boot Backend Service (REST API & WebSockets)
   # ------------------------------------------------------------------
   backend:
     build:
@@ -74,6 +98,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       PORT: 8080
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod,demo}
@@ -82,6 +108,10 @@ services:
       DB_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       JPA_DDL_AUTO: ${JPA_DDL_AUTO:-validate}
       FLYWAY_ENABLED: ${FLYWAY_ENABLED:-true}
       FLYWAY_BASELINE_ON_MIGRATE: ${FLYWAY_BASELINE_ON_MIGRATE:-false}
@@ -135,6 +165,8 @@ volumes:
     name: lifelink_mysql_data
   redis_data:
     name: lifelink_redis_data
+  rabbitmq_data:
+    name: lifelink_rabbitmq_data
 
 # --------------------------------------------------------------------
 # Network Configuration

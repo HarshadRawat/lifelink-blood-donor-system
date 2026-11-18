@@ -40,6 +40,10 @@ services:
         value: localhost
       - key: REDIS_PORT
         value: "6379"
+      - key: RABBITMQ_HOST
+        value: localhost
+      - key: RABBITMQ_PORT
+        value: "5672"
 
 databases:
   - name: lifelink-mysql
