@@ -43,6 +43,9 @@ export function AuthProvider({ children }) {
       if (response && response.token) {
         sessionStorage.setItem('lifelink_token', response.token);
       }
+      if (response && response.refreshToken) {
+        sessionStorage.setItem('lifelink_refresh_token', response.refreshToken);
+      }
       if (response && response.user) {
         sessionStorage.setItem('lifelink_user', JSON.stringify(response.user));
       }
@@ -64,10 +67,19 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const refreshToken = sessionStorage.getItem('lifelink_refresh_token');
+    if (refreshToken) {
+      try {
+        await api.auth.logout(refreshToken);
+      } catch (e) {
+        // Ignore logout errors
+      }
+    }
     setToken(null);
     setUser(null);
     sessionStorage.removeItem('lifelink_token');
+    sessionStorage.removeItem('lifelink_refresh_token');
     sessionStorage.removeItem('lifelink_user');
   };
 

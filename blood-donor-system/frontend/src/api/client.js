@@ -15,6 +15,9 @@ export class ApiError extends Error {
 /**
  * Centralized fetch wrapper with automatic JWT injection & error handling
  */
+let isRefreshing = false;
+let refreshPromise = null;
+
 async function request(endpoint, options = {}) {
   const token = sessionStorage.getItem('lifelink_token');
   const headers = {
@@ -34,7 +37,68 @@ async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
 
   try {
-    const response = await fetch(url, config);
+    let response = await fetch(url, config);
+
+    // Auto-refresh token on 401 Unauthorized (Task 9)
+    if (
+      response.status === 401 &&
+      !options._retry &&
+      !endpoint.startsWith('/api/auth/login') &&
+      !endpoint.startsWith('/api/auth/register') &&
+      !endpoint.startsWith('/api/auth/refresh')
+    ) {
+      const refreshToken = sessionStorage.getItem('lifelink_refresh_token');
+      if (refreshToken) {
+        if (!isRefreshing) {
+          isRefreshing = true;
+          refreshPromise = fetch(`${API_BASE_URL}/api/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+          })
+            .then(async (res) => {
+              if (!res.ok) {
+                throw new Error('Refresh token invalid or expired');
+              }
+              return res.json();
+            })
+            .then((data) => {
+              if (data && data.token) {
+                sessionStorage.setItem('lifelink_token', data.token);
+              }
+              if (data && data.refreshToken) {
+                sessionStorage.setItem('lifelink_refresh_token', data.refreshToken);
+              }
+              return data;
+            })
+            .catch((err) => {
+              sessionStorage.removeItem('lifelink_token');
+              sessionStorage.removeItem('lifelink_refresh_token');
+              sessionStorage.removeItem('lifelink_user');
+              throw err;
+            })
+            .finally(() => {
+              isRefreshing = false;
+              refreshPromise = null;
+            });
+        }
+
+        try {
+          const refreshResult = await refreshPromise;
+          const retryHeaders = {
+            ...headers,
+            Authorization: `Bearer ${refreshResult.token}`,
+          };
+          response = await fetch(url, {
+            ...config,
+            headers: retryHeaders,
+            _retry: true,
+          });
+        } catch (refreshErr) {
+          throw new ApiError('Session expired. Please log in again.', 401, null);
+        }
+      }
+    }
 
     // Handle 204 No Content
     if (response.status === 204) {
@@ -96,6 +160,16 @@ export const api = {
       request('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify(userData),
+      }),
+    refresh: (refreshToken) =>
+      request('/api/auth/refresh', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      }),
+    logout: (refreshToken) =>
+      request('/api/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
       }),
   },
 
@@ -211,5 +285,17 @@ export const api = {
       const queryString = query.toString() ? `?${query.toString()}` : '';
       return request(`/api/admin/users${queryString}`);
     },
+    getPendingHospitals: (params = {}) => {
+      const query = new URLSearchParams();
+      if (params.page !== undefined) query.append('page', params.page);
+      if (params.size !== undefined) query.append('size', params.size);
+      const queryString = query.toString() ? `?${query.toString()}` : '';
+      return request(`/api/admin/hospitals/pending${queryString}`);
+    },
+    verifyHospital: (hospitalId, verified) =>
+      request(`/api/admin/hospitals/${hospitalId}/verify`, {
+        method: 'PATCH',
+        body: JSON.stringify({ verified }),
+      }),
   },
 };
