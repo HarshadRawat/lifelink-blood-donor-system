@@ -1581,4 +1581,303 @@ public class DonorMatchingServiceTest {
         // Verify notificationService was NOT invoked for duplicate match
         verify(notificationService, never()).createMatchFoundNotification(any(), any());
     }
+
+    // =========================================================
+    // TASK 8: COOLDOWN, DYNAMIC RADIUS & CONCURRENCY UNIT TESTS
+    // =========================================================
+
+    @Test
+    void shouldExcludeDonorWhoDonatedWithinCooldownWindow() {
+        User hospitalUser = new User();
+        hospitalUser.setId(10L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(5L);
+        hospital.setUser(hospitalUser);
+        hospital.setLatitude(12.9716);
+        hospital.setLongitude(77.5946);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(20L);
+        request.setBloodGroup("A+");
+        request.setUnitsRequired(1);
+        request.setStatus(RequestStatus.ACTIVE);
+        request.setHospital(hospital);
+        request.setCurrentRadiusKm(20.0);
+
+        User donorUser = new User();
+        donorUser.setId(11L);
+        donorUser.setName("Recent Donor");
+
+        DonorProfile donor = new DonorProfile();
+        donor.setId(21L);
+        donor.setUser(donorUser);
+        donor.setBloodGroup("A+");
+        donor.setAvailable(true);
+        donor.setLatitude(12.9720);
+        donor.setLongitude(77.5950);
+        // Donated 30 days ago (within 90-day cooldown)
+        donor.setLastDonationDate(LocalDateTime.now().minusDays(30));
+
+        when(emergencyRequestRepository.findById(20L)).thenReturn(Optional.of(request));
+        when(donorProfileRepository.findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+                .thenReturn(List.of(donor));
+        when(requestDonorMatchRepository.saveAll(anyList())).thenReturn(List.of());
+
+        List<RequestDonorMatchResponse> matches = donorMatchingService.findMatches(20L);
+
+        // Excluded due to cooldown
+        assertTrue(matches.isEmpty(), "Donor within 90-day cooldown must be excluded");
+        verify(notificationService, never()).createMatchFoundNotification(any(), any());
+    }
+
+    @Test
+    void shouldIncludeDonorWhoDonatedBeyondCooldownWindow() {
+        User hospitalUser = new User();
+        hospitalUser.setId(10L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(5L);
+        hospital.setUser(hospitalUser);
+        hospital.setLatitude(12.9716);
+        hospital.setLongitude(77.5946);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(21L);
+        request.setBloodGroup("A+");
+        request.setUnitsRequired(1);
+        request.setStatus(RequestStatus.ACTIVE);
+        request.setHospital(hospital);
+        request.setCurrentRadiusKm(20.0);
+
+        User donorUser = new User();
+        donorUser.setId(12L);
+        donorUser.setName("Eligible Donor");
+
+        DonorProfile donor = new DonorProfile();
+        donor.setId(22L);
+        donor.setUser(donorUser);
+        donor.setBloodGroup("A+");
+        donor.setAvailable(true);
+        donor.setLatitude(12.9720);
+        donor.setLongitude(77.5950);
+        // Donated 95 days ago (outside 90-day cooldown)
+        donor.setLastDonationDate(LocalDateTime.now().minusDays(95));
+
+        RequestDonorMatch match = new RequestDonorMatch();
+        match.setId(201L);
+        match.setEmergencyRequest(request);
+        match.setDonor(donor);
+        match.setStatus(MatchStatus.MATCHED);
+
+        when(emergencyRequestRepository.findById(21L)).thenReturn(Optional.of(request));
+        when(donorProfileRepository.findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+                .thenReturn(List.of(donor));
+        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, donor)).thenReturn(false);
+        when(requestDonorMatchRepository.saveAll(anyList())).thenReturn(List.of(match));
+
+        List<RequestDonorMatchResponse> matches = donorMatchingService.findMatches(21L);
+
+        assertEquals(1, matches.size());
+        assertEquals(201L, matches.get(0).getId());
+    }
+
+    @Test
+    void shouldIncludeDonorWithNoPriorDonations() {
+        User hospitalUser = new User();
+        hospitalUser.setId(10L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(5L);
+        hospital.setUser(hospitalUser);
+        hospital.setLatitude(12.9716);
+        hospital.setLongitude(77.5946);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(22L);
+        request.setBloodGroup("B+");
+        request.setUnitsRequired(1);
+        request.setStatus(RequestStatus.ACTIVE);
+        request.setHospital(hospital);
+        request.setCurrentRadiusKm(20.0);
+
+        User donorUser = new User();
+        donorUser.setId(13L);
+        donorUser.setName("First Time Donor");
+
+        DonorProfile donor = new DonorProfile();
+        donor.setId(23L);
+        donor.setUser(donorUser);
+        donor.setBloodGroup("B+");
+        donor.setAvailable(true);
+        donor.setLatitude(12.9720);
+        donor.setLongitude(77.5950);
+        donor.setLastDonationDate(null); // Never donated before
+
+        RequestDonorMatch match = new RequestDonorMatch();
+        match.setId(202L);
+        match.setEmergencyRequest(request);
+        match.setDonor(donor);
+        match.setStatus(MatchStatus.MATCHED);
+
+        when(emergencyRequestRepository.findById(22L)).thenReturn(Optional.of(request));
+        when(donorProfileRepository.findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+                .thenReturn(List.of(donor));
+        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, donor)).thenReturn(false);
+        when(requestDonorMatchRepository.saveAll(anyList())).thenReturn(List.of(match));
+
+        List<RequestDonorMatchResponse> matches = donorMatchingService.findMatches(22L);
+
+        assertEquals(1, matches.size());
+        assertEquals(202L, matches.get(0).getId());
+    }
+
+    @Test
+    void shouldUpdateDonorLastDonationDateWhenMatchCompleted() {
+        User hospitalUser = new User();
+        hospitalUser.setId(100L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(50L);
+        hospital.setUser(hospitalUser);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(30L);
+        request.setUnitsRequired(2);
+        request.setStatus(RequestStatus.ACTIVE);
+        request.setHospital(hospital);
+
+        User donorUser = new User();
+        donorUser.setId(101L);
+        donorUser.setName("Completing Donor");
+
+        DonorProfile donor = new DonorProfile();
+        donor.setId(31L);
+        donor.setUser(donorUser);
+        donor.setBloodGroup("O+");
+        donor.setLastDonationDate(null);
+
+        RequestDonorMatch match = new RequestDonorMatch();
+        match.setId(301L);
+        match.setEmergencyRequest(request);
+        match.setDonor(donor);
+        match.setStatus(MatchStatus.ACCEPTED);
+
+        when(requestDonorMatchRepository.findById(301L)).thenReturn(Optional.of(match));
+        when(requestDonorMatchRepository.save(match)).thenReturn(match);
+        // Current completed is 0, becomes 1 after this completion
+        when(requestDonorMatchRepository.countByEmergencyRequestAndStatus(request, MatchStatus.COMPLETED))
+                .thenReturn(1L);
+
+        RequestDonorMatchResponse response = donorMatchingService.completeMatch(301L, 100L);
+
+        assertEquals(MatchStatus.COMPLETED, response.getStatus());
+        org.junit.jupiter.api.Assertions.assertNotNull(donor.getLastDonationDate());
+        verify(donorProfileRepository).save(donor);
+    }
+
+    @Test
+    void shouldPreventOverFulfillmentWhenRequestUnitsAlreadySatisfied() {
+        User hospitalUser = new User();
+        hospitalUser.setId(100L);
+
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(50L);
+        hospital.setUser(hospitalUser);
+
+        EmergencyRequest request = new EmergencyRequest();
+        request.setId(31L);
+        request.setUnitsRequired(1);
+        request.setStatus(RequestStatus.FULFILLED); // Already fulfilled
+        request.setHospital(hospital);
+
+        User donorUser = new User();
+        donorUser.setId(102L);
+
+        DonorProfile donor = new DonorProfile();
+        donor.setId(32L);
+        donor.setUser(donorUser);
+
+        RequestDonorMatch match = new RequestDonorMatch();
+        match.setId(302L);
+        match.setEmergencyRequest(request);
+        match.setDonor(donor);
+        match.setStatus(MatchStatus.ACCEPTED);
+
+        when(requestDonorMatchRepository.findById(302L)).thenReturn(Optional.of(match));
+
+        BusinessRuleException ex = assertThrows(
+                BusinessRuleException.class,
+                () -> donorMatchingService.completeMatch(302L, 100L)
+        );
+
+        assertEquals("Emergency request is already fully fulfilled", ex.getMessage());
+        verify(requestDonorMatchRepository, never()).save(match);
+    }
+
+    @Test
+    void shouldMatchDonorOutsideStandardRadiusWhenRequestRadiusEscalated() {
+        User hospitalUser = new User();
+        hospitalUser.setId(10L);
+
+        // Hospital in Bangalore center: (12.9716, 77.5946)
+        HospitalProfile hospital = new HospitalProfile();
+        hospital.setId(5L);
+        hospital.setUser(hospitalUser);
+        hospital.setLatitude(12.9716);
+        hospital.setLongitude(77.5946);
+
+        // Donor located ~30 km away: (13.2000, 77.5946)
+        User donorUser = new User();
+        donorUser.setId(15L);
+        donorUser.setName("Distant Donor");
+
+        DonorProfile distantDonor = new DonorProfile();
+        distantDonor.setId(40L);
+        distantDonor.setUser(donorUser);
+        distantDonor.setBloodGroup("AB+");
+        distantDonor.setAvailable(true);
+        distantDonor.setLatitude(13.2000);
+        distantDonor.setLongitude(77.5946);
+
+        // Case 1: Standard 20 km radius request -> Distant donor should NOT match
+        EmergencyRequest standardRequest = new EmergencyRequest();
+        standardRequest.setId(41L);
+        standardRequest.setBloodGroup("AB+");
+        standardRequest.setUnitsRequired(1);
+        standardRequest.setStatus(RequestStatus.ACTIVE);
+        standardRequest.setHospital(hospital);
+        standardRequest.setCurrentRadiusKm(20.0);
+
+        when(emergencyRequestRepository.findById(41L)).thenReturn(Optional.of(standardRequest));
+        when(donorProfileRepository.findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+                .thenReturn(List.of(distantDonor));
+
+        List<RequestDonorMatchResponse> standardMatches = donorMatchingService.findMatches(41L);
+        assertTrue(standardMatches.isEmpty(), "Distant donor at ~30km should not match within 20km");
+
+        // Case 2: Escalated 40 km radius request -> Distant donor SHOULD match
+        EmergencyRequest escalatedRequest = new EmergencyRequest();
+        escalatedRequest.setId(42L);
+        escalatedRequest.setBloodGroup("AB+");
+        escalatedRequest.setUnitsRequired(1);
+        escalatedRequest.setStatus(RequestStatus.ACTIVE);
+        escalatedRequest.setHospital(hospital);
+        escalatedRequest.setCurrentRadiusKm(40.0);
+
+        RequestDonorMatch match = new RequestDonorMatch();
+        match.setId(401L);
+        match.setEmergencyRequest(escalatedRequest);
+        match.setDonor(distantDonor);
+        match.setStatus(MatchStatus.MATCHED);
+
+        when(emergencyRequestRepository.findById(42L)).thenReturn(Optional.of(escalatedRequest));
+        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(escalatedRequest, distantDonor))
+                .thenReturn(false);
+        when(requestDonorMatchRepository.saveAll(anyList())).thenReturn(List.of(match));
+
+        List<RequestDonorMatchResponse> escalatedMatches = donorMatchingService.findMatches(42L);
+        assertEquals(1, escalatedMatches.size());
+        assertEquals(401L, escalatedMatches.get(0).getId());
+    }
 }
