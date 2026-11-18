@@ -4,16 +4,19 @@ import com.example.blooddonor.dto.EmergencyRequestRequest;
 import com.example.blooddonor.dto.EmergencyRequestResponse;
 import com.example.blooddonor.dto.EmergencyRequestStatusRequest;
 import com.example.blooddonor.entity.*;
+import com.example.blooddonor.event.EmergencyRequestCreatedEvent;
 import com.example.blooddonor.exception.BusinessRuleException;
 import com.example.blooddonor.repository.EmergencyRequestRepository;
 import com.example.blooddonor.repository.HospitalProfileRepository;
 import com.example.blooddonor.repository.RequestDonorMatchRepository;
 import com.example.blooddonor.repository.UserRepository;
 import com.example.blooddonor.repository.specification.EmergencyRequestSpecification;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,21 +30,25 @@ public class EmergencyRequestService {
 
     private final RequestDonorMatchRepository requestDonorMatchRepository;
     private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public EmergencyRequestService(
             UserRepository userRepository,
             HospitalProfileRepository hospitalProfileRepository,
             EmergencyRequestRepository emergencyRequestRepository,
             RequestDonorMatchRepository requestDonorMatchRepository,
-            NotificationService notificationService
+            NotificationService notificationService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.userRepository = userRepository;
         this.hospitalProfileRepository = hospitalProfileRepository;
         this.emergencyRequestRepository = emergencyRequestRepository;
         this.requestDonorMatchRepository = requestDonorMatchRepository;
         this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
     }
 
+    @Transactional
     public EmergencyRequestResponse createRequest(
             EmergencyRequestRequest request,
             Long userId) {
@@ -85,6 +92,18 @@ public class EmergencyRequestService {
                 emergencyRequestRepository.save(
                         emergencyRequest
                 );
+
+        eventPublisher.publishEvent(new EmergencyRequestCreatedEvent(
+                savedRequest.getId(),
+                savedRequest.getBloodGroup(),
+                savedRequest.getUnitsRequired(),
+                savedRequest.getUrgency() != null ? savedRequest.getUrgency().name() : null,
+                hospital.getLatitude(),
+                hospital.getLongitude(),
+                hospital.getId(),
+                hospital.getHospitalName(),
+                savedRequest.getCreatedAt()
+        ));
 
         EmergencyRequestResponse response =
                 new EmergencyRequestResponse();
