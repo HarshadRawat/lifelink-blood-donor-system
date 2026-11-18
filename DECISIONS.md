@@ -192,3 +192,14 @@ This document records the architectural, security, and infrastructure decisions 
   - *Defense in Depth for Sensitive Medical Data*: Hospital verification prevents spam and spoofed emergency broadcasts, while audit logging deters unauthorized scraping of donor personal identifying information (PII).
 * **Trade-Off**:
   - Refresh token rotation adds a fast indexed read/write on the `refresh_tokens` table every 15 minutes per active client session, which is negligible and comfortably handled by database indexes.
+
+### ADR 014: Observability Architecture — Micrometer Prometheus Scraping, SLF4J MDC Correlation IDs, and Distributed Load Profiling with k6
+* **Context & Decision**: Production services require end-to-end distributed tracing, real-time telemetry, and repeatable performance benchmarking under concurrency:
+  1. **Prometheus Exposition with Access Security**: Integrated `io.micrometer:micrometer-registry-prometheus` into Spring Boot Actuator (`/actuator/prometheus`). Exposing internal memory, garbage collection, and request metrics to the open internet leaks infrastructure details; therefore, access is locked down in `SecurityConfig` to `hasRole('ADMIN')` and internal scraper subnets.
+  2. **Structured Logging with Correlation IDs (SLF4J MDC)**: Implemented `CorrelationIdFilter` (`@Order(Ordered.HIGHEST_PRECEDENCE)`). If an incoming request provides `X-Correlation-ID` or `X-Request-ID`, it is preserved; otherwise a new UUID is generated. The ID is stored in the thread-local SLF4J MDC, formatted into log lines via `logging.pattern.console`, returned in the `X-Correlation-ID` response header, and cleared in a `finally` block to prevent thread pool leakage.
+  3. **High-Concurrency Load Testing Suite (k6)**: Implemented modular k6 scenarios under `load-tests/` (`search-matching.js`, `login.js`, `create-request.js`, `full-lifecycle.js`) testing up to 50 concurrent virtual users against SLAs ($p95 < 300\text{ ms}$, error rate $< 1\%$). Created `docker-compose.monitoring.yml` with Prometheus and Grafana dashboards.
+* **Why**:
+  - *Correlation IDs in Async/Multi-threaded Systems*: In systems utilizing thread pools, filters, and asynchronous event listeners, logs without correlation IDs interleave unpredictably. A unified `X-Correlation-ID` allows tracking an individual request end-to-end across authentication, matching, and database commits.
+  - *Standardized Prometheus Metric Format*: Enables out-of-the-box compatibility with Kubernetes, Grafana Cloud, Datadog, or standalone Prometheus without proprietary agent lock-in.
+* **Trade-Off**:
+  - Thread-local MDC requires strict lifecycle management (clearing on request completion) to avoid context bleeding when threads are returned to servlet worker pools.

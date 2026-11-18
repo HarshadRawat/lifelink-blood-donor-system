@@ -9,7 +9,7 @@
 [![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1.svg)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](DOCKER.md)
 [![GHCR](https://img.shields.io/badge/Container%20Registry-GHCR-blue.svg?logo=github)](https://github.com/HarshadRawat/lifelink-blood-donor-system/pkgs/container/lifelink-backend)
-[![Tests](https://img.shields.io/badge/Tests-235%20Passed-success.svg)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/Tests-253%20Passed-success.svg)](#testing--quality-assurance)
 [![Benchmark](https://img.shields.io/badge/100k%20Donors-12.5ms%20(9.3x%20faster)-brightgreen.svg)](docs/BENCHMARK.md)
 
 LifeLink is an emergency blood coordination platform built with Java Spring Boot and React. It bridges the critical latency gap between hospital blood shortages and nearby eligible donors using geolocation radius search, biological blood compatibility matrix matching, real-time push notifications over WebSockets, and privacy-first contact sharing. Detailed architecture documentation is maintained in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and architectural decisions are tracked in [DECISIONS.md](DECISIONS.md).
@@ -430,14 +430,17 @@ flowchart LR
 ### Container Health & Observability:
 * **Actuator Health Check**: `GET http://localhost/actuator/health`
   Returns `{"status": "UP"}` with active database connectivity verification.
+* **Prometheus Metrics**: `GET http://localhost:8080/actuator/prometheus`
+  Exposes JVM heap/non-heap memory, garbage collection pauses, HTTP request latencies, and thread pool metrics (protected behind `ROLE_ADMIN`).
 * **Frontend Gateway Probe**: `GET http://localhost/health`
   Returns `200 OK` ("healthy").
+* **k6 High-Concurrency Load Tests**: Executable scripts under `load-tests/` benchmarking login, geolocation matching, request creation, and full hospital lifecycles under 50 concurrent virtual users.
 
 ---
 
 ## Testing & Quality Assurance
 
-LifeLink maintains a full suite of **235 automated tests** (185 backend tests across controllers, services, security, 32-thread concurrency, scheduled escalation, 90-day cooldown, demo initialization, geolocation boundary conditions, and lifecycle integration + 50 frontend component tests):
+LifeLink maintains a full suite of **253 automated tests** (203 backend tests across controllers, services, security, 32-thread concurrency, scheduled escalation, 90-day cooldown, demo initialization, geolocation boundary conditions, and lifecycle integration + 50 frontend component tests):
 
 ### 1. Frontend Automated Tests (Vitest + React Testing Library)
 A suite of **50 automated frontend tests** covering UI components, state contexts, authentication routing, and core user dashboards:
