@@ -6,6 +6,8 @@ import com.example.blooddonor.dto.EmergencyRequestStatusRequest;
 import com.example.blooddonor.entity.*;
 import com.example.blooddonor.event.EmergencyRequestCreatedEvent;
 import com.example.blooddonor.exception.BusinessRuleException;
+import com.example.blooddonor.exception.ForbiddenOperationException;
+import com.example.blooddonor.exception.ResourceNotFoundException;
 import com.example.blooddonor.repository.EmergencyRequestRepository;
 import com.example.blooddonor.repository.HospitalProfileRepository;
 import com.example.blooddonor.repository.RequestDonorMatchRepository;
@@ -55,12 +57,12 @@ public class EmergencyRequestService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
         HospitalProfile hospital =
                 hospitalProfileRepository.findByUser(user)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Hospital profile not found"));
 
         // Hospital verification check (Task 9 - Anti-fraud protection)
@@ -158,12 +160,12 @@ public class EmergencyRequestService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
         HospitalProfile hospital =
                 hospitalProfileRepository.findByUser(user)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Hospital profile not found"));
 
         Specification<EmergencyRequest> specification =
@@ -213,6 +215,7 @@ public class EmergencyRequestService {
         });
     }
 
+    @Transactional
     public EmergencyRequestResponse updateStatus(
             Long requestId,
             EmergencyRequestStatusRequest request,
@@ -220,25 +223,25 @@ public class EmergencyRequestService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
         HospitalProfile hospital =
                 hospitalProfileRepository.findByUser(user)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Hospital profile not found"));
 
         EmergencyRequest emergencyRequest =
-                emergencyRequestRepository.findById(requestId)
+                emergencyRequestRepository.findByIdWithPessimisticLock(requestId)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Emergency request not found"));
 
         // Check ownership
         if (!emergencyRequest.getHospital().getId()
                 .equals(hospital.getId())) {
 
-            throw new BusinessRuleException(
+            throw new ForbiddenOperationException(
                     "You are not allowed to update this request"
             );
         }

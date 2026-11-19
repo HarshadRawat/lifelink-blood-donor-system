@@ -9,6 +9,8 @@ import com.example.blooddonor.entity.RequestStatus;
 import com.example.blooddonor.entity.Urgency;
 import com.example.blooddonor.entity.User;
 import com.example.blooddonor.exception.BusinessRuleException;
+import com.example.blooddonor.exception.ForbiddenOperationException;
+import com.example.blooddonor.exception.ResourceNotFoundException;
 import com.example.blooddonor.repository.EmergencyRequestRepository;
 import com.example.blooddonor.repository.HospitalProfileRepository;
 import com.example.blooddonor.repository.RequestDonorMatchRepository;
@@ -151,8 +153,8 @@ class EmergencyRequestServiceTest {
         when(hospitalProfileRepository.findByUser(hospitalUser))
                 .thenReturn(Optional.empty());
 
-        RuntimeException exception = assertThrows(
-                RuntimeException.class,
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
                 () -> emergencyRequestService.createRequest(
                         request,
                         1L
@@ -227,7 +229,7 @@ class EmergencyRequestServiceTest {
         when(hospitalProfileRepository.findByUser(hospitalUser))
                 .thenReturn(Optional.of(hospital));
 
-        when(emergencyRequestRepository.findById(1L))
+        when(emergencyRequestRepository.findByIdWithPessimisticLock(1L))
                 .thenReturn(Optional.of(existingRequest));
 
         when(emergencyRequestRepository.save(existingRequest))
@@ -303,13 +305,13 @@ class EmergencyRequestServiceTest {
 
 
         // But request belongs to Hospital 2
-        when(emergencyRequestRepository.findById(1L))
+        when(emergencyRequestRepository.findByIdWithPessimisticLock(1L))
                 .thenReturn(Optional.of(existingRequest));
 
 
         // Expect authorization exception
-        RuntimeException exception = assertThrows(
-                RuntimeException.class,
+        ForbiddenOperationException exception = assertThrows(
+                ForbiddenOperationException.class,
                 () -> emergencyRequestService.updateStatus(
                         1L,
                         statusRequest,
@@ -354,12 +356,12 @@ class EmergencyRequestServiceTest {
 
 
         // Request does not exist
-        when(emergencyRequestRepository.findById(999L))
+        when(emergencyRequestRepository.findByIdWithPessimisticLock(999L))
                 .thenReturn(Optional.empty());
 
 
-        RuntimeException exception = assertThrows(
-                RuntimeException.class,
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
                 () -> emergencyRequestService.updateStatus(
                         999L,
                         statusRequest,
@@ -413,7 +415,7 @@ class EmergencyRequestServiceTest {
         when(hospitalProfileRepository.findByUser(hospitalUser))
                 .thenReturn(Optional.of(hospital));
 
-        when(emergencyRequestRepository.findById(1L))
+        when(emergencyRequestRepository.findByIdWithPessimisticLock(1L))
                 .thenReturn(Optional.of(existingRequest));
 
 
@@ -480,7 +482,7 @@ class EmergencyRequestServiceTest {
         when(hospitalProfileRepository.findByUser(hospitalUser))
                 .thenReturn(Optional.of(hospital));
 
-        when(emergencyRequestRepository.findById(1L))
+        when(emergencyRequestRepository.findByIdWithPessimisticLock(1L))
                 .thenReturn(Optional.of(existingRequest));
 
 
@@ -870,8 +872,8 @@ class EmergencyRequestServiceTest {
         Pageable pageable =
                 PageRequest.of(0, 10);
 
-        RuntimeException exception = assertThrows(
-                RuntimeException.class,
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
                 () -> emergencyRequestService.getMyRequests(
                         999L,
                         null,
@@ -911,8 +913,8 @@ class EmergencyRequestServiceTest {
         Pageable pageable =
                 PageRequest.of(0, 10);
 
-        RuntimeException exception = assertThrows(
-                RuntimeException.class,
+        ResourceNotFoundException exception = assertThrows(
+                ResourceNotFoundException.class,
                 () -> emergencyRequestService.getMyRequests(
                         1L,
                         null,

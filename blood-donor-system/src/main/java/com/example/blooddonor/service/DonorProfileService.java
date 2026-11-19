@@ -5,6 +5,7 @@ import com.example.blooddonor.dto.DonorProfileRequest;
 import com.example.blooddonor.dto.DonorProfileResponse;
 import com.example.blooddonor.entity.DonorProfile;
 import com.example.blooddonor.entity.User;
+import com.example.blooddonor.exception.ResourceNotFoundException;
 import com.example.blooddonor.repository.DonorProfileRepository;
 import com.example.blooddonor.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -29,7 +30,7 @@ public class DonorProfileService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
         DonorProfile profile = new DonorProfile();
 
@@ -68,11 +69,11 @@ public class DonorProfileService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
         DonorProfile profile = donorProfileRepository.findByUser(user)
                 .orElseThrow(() ->
-                        new RuntimeException("Donor profile not found"));
+                        new ResourceNotFoundException("Donor profile not found"));
 
         profile.setBloodGroup(request.getBloodGroup());
         profile.setAddress(request.getAddress());
@@ -105,11 +106,11 @@ public class DonorProfileService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
         DonorProfile profile = donorProfileRepository.findByUser(user)
                 .orElseThrow(() ->
-                        new RuntimeException("Donor profile not found"));
+                        new ResourceNotFoundException("Donor profile not found"));
 
         DonorProfileResponse response =
                 new DonorProfileResponse();
@@ -133,11 +134,11 @@ public class DonorProfileService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
         DonorProfile profile = donorProfileRepository.findByUser(user)
                 .orElseThrow(() ->
-                        new RuntimeException("Donor profile not found"));
+                        new ResourceNotFoundException("Donor profile not found"));
 
         profile.setAvailable(request.getAvailable());
 

@@ -4,6 +4,8 @@ import com.example.blooddonor.dto.HospitalProfileRequest;
 import com.example.blooddonor.dto.HospitalProfileResponse;
 import com.example.blooddonor.entity.HospitalProfile;
 import com.example.blooddonor.entity.User;
+import com.example.blooddonor.exception.BusinessRuleException;
+import com.example.blooddonor.exception.ResourceNotFoundException;
 import com.example.blooddonor.repository.HospitalProfileRepository;
 import com.example.blooddonor.repository.UserRepository;
 import org.springframework.cache.annotation.CacheEvict;
@@ -31,10 +33,10 @@ public class HospitalProfileService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
         if (hospitalProfileRepository.findByUser(user).isPresent()) {
-            throw new RuntimeException("Hospital profile already exists");
+            throw new BusinessRuleException("Hospital profile already exists");
         }
 
         HospitalProfile profile = new HospitalProfile();
@@ -78,12 +80,12 @@ public class HospitalProfileService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
         HospitalProfile profile =
                 hospitalProfileRepository.findByUser(user)
                         .orElseThrow(() ->
-                                new RuntimeException("Hospital profile not found"));
+                                new ResourceNotFoundException("Hospital profile not found"));
 
         HospitalProfileResponse response =
                 new HospitalProfileResponse();
@@ -111,12 +113,12 @@ public class HospitalProfileService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                        new ResourceNotFoundException("User not found"));
 
         HospitalProfile profile =
                 hospitalProfileRepository.findByUser(user)
                         .orElseThrow(() ->
-                                new RuntimeException("Hospital profile not found"));
+                                new ResourceNotFoundException("Hospital profile not found"));
 
         profile.setHospitalName(request.getHospitalName());
         profile.setRegistrationNumber(
