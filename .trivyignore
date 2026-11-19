@@ -1,2 +1,18 @@
 # LifeLink Trivy Vulnerability Scanner Ignore File
-# Add CVE IDs here with documented justification if unfixable upstream vendor alerts occur
+# Documented and justified upstream exceptions (Page 15 of roadmap)
+
+# CVE-2026-65182: Embedded Tomcat security constraint bypass in FORM/DIGEST auth.
+# Justification: LifeLink does not use Servlet FORM/DIGEST auth; it uses stateless Spring Security JWT Bearer filters.
+CVE-2026-65182
+
+# CVE-2026-65637: Embedded Tomcat HTTP/2 no-authority bypass.
+# Justification: LifeLink terminates TLS and HTTP/2 at the outer reverse proxy (Caddy/Nginx) and proxies plain HTTP/1.1 to the backend.
+CVE-2026-65637
+
+# CVE-2026-65905: Embedded Tomcat authentication bypass via replay attack in DIGEST authenticator.
+# Justification: DIGEST authentication is disabled; user credentials are verified with BCrypt in UserService.
+CVE-2026-65905
+
+# CVE-2026-68525: Embedded Tomcat unauthorized resource access via FORM authentication bypass.
+# Justification: FORM authentication is disabled; authentication is handled via custom REST /api/auth/login endpoints.
+CVE-2026-68525

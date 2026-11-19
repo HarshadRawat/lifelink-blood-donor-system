@@ -120,6 +120,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Prepare Test Environment File
+        run: cp .env.example .env
+
       - name: Validate Production Docker Compose Config
         run: docker compose config
 
@@ -145,6 +148,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           scan-type: 'fs'
+          trivyignores: '.trivyignore'
           ignore-unfixed: true
           format: 'table'
           severity: 'CRITICAL,HIGH'
@@ -160,6 +164,7 @@ jobs:
         with:
           scan-type: 'image'
           image-ref: 'lifelink-backend:scan'
+          trivyignores: '.trivyignore'
           ignore-unfixed: true
           format: 'table'
           severity: 'CRITICAL'
