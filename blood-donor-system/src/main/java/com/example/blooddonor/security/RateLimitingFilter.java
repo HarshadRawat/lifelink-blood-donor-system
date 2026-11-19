@@ -111,8 +111,8 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         String method = request.getMethod();
 
-        // Protect login and registration from brute force attacks
-        if ("POST".equalsIgnoreCase(method) && ("/api/auth/login".equals(path) || "/api/auth/register".equals(path))) {
+        // Protect authentication endpoints from brute force and credential stuffing attacks
+        if ("POST".equalsIgnoreCase(method) && ("/api/auth/login".equals(path) || "/api/auth/register".equals(path) || "/api/auth/refresh".equals(path))) {
             String clientIp = getClientIp(request);
             boolean allowed = checkRateLimit(clientIp);
 
