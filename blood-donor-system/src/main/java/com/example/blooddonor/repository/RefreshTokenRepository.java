@@ -2,7 +2,9 @@ package com.example.blooddonor.repository;
 
 import com.example.blooddonor.entity.RefreshToken;
 import com.example.blooddonor.entity.User;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,9 +17,13 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     Optional<RefreshToken> findByTokenHash(String tokenHash);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM RefreshToken t WHERE t.tokenHash = :hash")
+    Optional<RefreshToken> findByTokenHashForUpdate(@Param("hash") String hash);
+
     List<RefreshToken> findByUserAndRevokedFalse(User user);
 
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE RefreshToken r SET r.revoked = true WHERE r.user = :user AND r.revoked = false")
     void revokeAllForUser(@Param("user") User user);
 

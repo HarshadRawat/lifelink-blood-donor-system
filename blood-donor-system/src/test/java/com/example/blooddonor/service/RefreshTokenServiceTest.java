@@ -80,7 +80,7 @@ class RefreshTokenServiceTest {
         existing.setExpiresAt(LocalDateTime.now(fixedClock).plusDays(5));
         existing.setRevoked(false);
 
-        when(refreshTokenRepository.findByTokenHash(oldHash)).thenReturn(Optional.of(existing));
+        when(refreshTokenRepository.findByTokenHashForUpdate(oldHash)).thenReturn(Optional.of(existing));
         when(jwtService.generateToken(42L, "DONOR")).thenReturn("new-access-jwt");
 
         LoginResponse response = refreshTokenService.rotateRefreshToken(oldRawToken);
@@ -110,7 +110,7 @@ class RefreshTokenServiceTest {
     @Test
     @DisplayName("rotateRefreshToken should throw exception when token hash not found")
     void rotateRefreshToken_shouldThrowWhenTokenNotFound() {
-        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
+        when(refreshTokenRepository.findByTokenHashForUpdate(anyString())).thenReturn(Optional.empty());
 
         assertThrows(InvalidCredentialsException.class, () -> refreshTokenService.rotateRefreshToken("nonexistent-token"));
     }
@@ -127,7 +127,7 @@ class RefreshTokenServiceTest {
         existing.setExpiresAt(LocalDateTime.now(fixedClock).minusHours(1)); // Expired
         existing.setRevoked(false);
 
-        when(refreshTokenRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(existing));
+        when(refreshTokenRepository.findByTokenHashForUpdate(tokenHash)).thenReturn(Optional.of(existing));
 
         InvalidCredentialsException ex = assertThrows(
                 InvalidCredentialsException.class,
@@ -151,7 +151,7 @@ class RefreshTokenServiceTest {
         compromisedRecord.setExpiresAt(LocalDateTime.now(fixedClock).plusDays(3));
         compromisedRecord.setRevoked(true); // Already revoked!
 
-        when(refreshTokenRepository.findByTokenHash(compromisedHash)).thenReturn(Optional.of(compromisedRecord));
+        when(refreshTokenRepository.findByTokenHashForUpdate(compromisedHash)).thenReturn(Optional.of(compromisedRecord));
 
         InvalidCredentialsException ex = assertThrows(
                 InvalidCredentialsException.class,

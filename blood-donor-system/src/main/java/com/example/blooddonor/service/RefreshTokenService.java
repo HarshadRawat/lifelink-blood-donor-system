@@ -75,14 +75,14 @@ public class RefreshTokenService {
      * @param rawRefreshToken incoming refresh token
      * @return LoginResponse containing new access token, new refresh token, and user details
      */
-    @Transactional
+    @Transactional(noRollbackFor = InvalidCredentialsException.class)
     public LoginResponse rotateRefreshToken(String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
             throw new InvalidCredentialsException("Refresh token must not be empty");
         }
 
         String tokenHash = hashToken(rawRefreshToken);
-        RefreshToken tokenRecord = refreshTokenRepository.findByTokenHash(tokenHash)
+        RefreshToken tokenRecord = refreshTokenRepository.findByTokenHashForUpdate(tokenHash)
                 .orElseThrow(() -> new InvalidCredentialsException("Invalid or expired refresh token"));
 
         User user = tokenRecord.getUser();
