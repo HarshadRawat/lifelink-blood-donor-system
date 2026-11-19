@@ -103,12 +103,12 @@ class DemoDataInitializerTest {
 
         demoDataInitializer.run();
 
-        // 1 Hospital + 5 Donors = 6 Users saved
-        verify(userRepository, times(6)).save(any(User.class));
-        verify(hospitalProfileRepository, times(1)).save(any(HospitalProfile.class));
-        verify(donorProfileRepository, times(5)).save(any());
-        verify(emergencyRequestRepository, times(1)).save(any());
-        verify(requestDonorMatchRepository, times(2)).save(any());
-        verify(notificationRepository, times(2)).save(any());
+        // 3 Hospitals + 10 Donors = 13 Users saved
+        verify(userRepository, times(13)).save(any(User.class));
+        verify(hospitalProfileRepository, times(3)).save(any(HospitalProfile.class));
+        verify(donorProfileRepository, times(10)).save(any());
+        verify(emergencyRequestRepository, times(2)).save(any());
+        verify(requestDonorMatchRepository, times(3)).save(any());
+        verify(notificationRepository, times(3)).save(any());
     }
 }

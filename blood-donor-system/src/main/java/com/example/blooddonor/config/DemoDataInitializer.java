@@ -78,29 +78,26 @@ public class DemoDataInitializer implements CommandLineRunner {
         log.info("[LifeLink Demo] Initializing realistic Bangalore demonstration dataset...");
 
         // ====================================================================
-        // 1. Demo Hospital: City Care Hospital (Central Bengaluru: 12.9352, 77.6245)
+        // 1. Demo Hospitals: Verified & Pending Verification
         // ====================================================================
-        User hospUser = new User();
-        hospUser.setName("City Care Hospital");
-        hospUser.setEmail("hospital@lifelink.com");
-        hospUser.setPassword(passwordEncoder.encode("Hospital123!"));
-        hospUser.setRole(Role.HOSPITAL);
-        hospUser = userRepository.save(hospUser);
+        // Hospital 1: City Care Hospital (Central Bengaluru: 12.9352, 77.6245) - Verified
+        HospitalProfile hospProfile = createDemoHospital("City Care Hospital", "hospital@lifelink.com", "Hospital123!",
+                "KA-BLR-HOSP-2026-001", "100 Hospital Boulevard, Koramangala", "Bengaluru",
+                12.9352, 77.6245, "+91-8012345678", true);
+        User hospUser = hospProfile.getUser();
 
-        HospitalProfile hospProfile = new HospitalProfile();
-        hospProfile.setUser(hospUser);
-        hospProfile.setHospitalName("City Care Hospital");
-        hospProfile.setRegistrationNumber("KA-BLR-HOSP-2026-001");
-        hospProfile.setAddress("100 Hospital Boulevard, Koramangala");
-        hospProfile.setCity("Bengaluru");
-        hospProfile.setLatitude(12.9352);
-        hospProfile.setLongitude(77.6245);
-        hospProfile.setContactNumber("+91-8012345678");
-        hospProfile.setVerified(true);
-        hospProfile = hospitalProfileRepository.save(hospProfile);
+        // Hospital 2: Metro Trauma Center (Indiranagar: 12.9716, 77.6412) - Verified
+        HospitalProfile metroProfile = createDemoHospital("Metro Trauma Center", "metro.hospital@lifelink.com", "Hospital123!",
+                "KA-BLR-HOSP-2026-002", "45 100ft Road, Indiranagar", "Bengaluru",
+                12.9716, 77.6412, "+91-8022334455", true);
+
+        // Hospital 3: St. Jude Community Hospital (Whitefield: 12.9698, 77.7500) - Unverified (Pending Admin Approval)
+        createDemoHospital("St. Jude Community Hospital", "pending.hospital@lifelink.com", "Hospital123!",
+                "KA-BLR-HOSP-2026-003", "12 ITPL Main Road, Whitefield", "Bengaluru",
+                12.9698, 77.7500, "+91-8033445566", false);
 
         // ====================================================================
-        // 2. Demo Donors: Geographic cluster around Koramangala & Bangalore
+        // 2. Demo Donors: Geographic cluster covering ABO/Rh & Availability
         // ====================================================================
 
         // Donor 1: Alice Sharma (A+, ~0.5 km away -> DIRECT COMPATIBLE & NEARBY)
@@ -123,14 +120,40 @@ public class DemoDataInitializer implements CommandLineRunner {
         createDemoDonor(davidUser, "AB+",
                 "77 100ft Road, Indiranagar", "Bengaluru", 12.9780, 77.6400, "+91-9876543213", true);
 
-        // Donor 5: Emma Watson (A+, ~60 km away in Tumkur -> OUTSIDE 20 KM RADIUS)
+        // Donor 5: Fiona Dias (O+, ~2.5 km away -> COMPATIBLE WITH A+, B+, AB+, O+)
+        User fionaUser = createDemoUser("Fiona Dias", "fiona.donor@lifelink.com", "Donor123!", Role.DONOR);
+        DonorProfile fionaProfile = createDemoDonor(fionaUser, "O+",
+                "Sector 2, HSR Layout", "Bengaluru", 12.9121, 77.6446, "+91-9876543215", true);
+
+        // Donor 6: George Thomas (B-, ~3.0 km away -> Rh Negative)
+        User georgeUser = createDemoUser("George Thomas", "george.donor@lifelink.com", "Donor123!", Role.DONOR);
+        createDemoDonor(georgeUser, "B-",
+                "Intermediate Ring Road, Domlur", "Bengaluru", 12.9609, 77.6387, "+91-9876543216", true);
+
+        // Donor 7: Hannah Paul (AB-, ~5.0 km away -> Rare blood type)
+        User hannahUser = createDemoUser("Hannah Paul", "hannah.donor@lifelink.com", "Donor123!", Role.DONOR);
+        createDemoDonor(hannahUser, "AB-",
+                "MG Road, Brigade Junction", "Bengaluru", 12.9756, 77.6066, "+91-9876543217", true);
+
+        // Donor 8: Ian Wright (A-, ~1.2 km away -> Compatible with A+, A-)
+        User ianUser = createDemoUser("Ian Wright", "ian.donor@lifelink.com", "Donor123!", Role.DONOR);
+        createDemoDonor(ianUser, "A-",
+                "80ft Road, Ejipura", "Bengaluru", 12.9385, 77.6315, "+91-9876543218", true);
+
+        // Donor 9: Jack Miller (A+, ~3.2 km away -> UNAVAILABLE: Tests availability toggle filter)
+        User jackUser = createDemoUser("Jack Miller", "jack.donor@lifelink.com", "Donor123!", Role.DONOR);
+        createDemoDonor(jackUser, "A+",
+                "16th Main, BTM Layout 2nd Stage", "Bengaluru", 12.9166, 77.6101, "+91-9876543219", false);
+
+        // Donor 10: Emma Watson (A+, ~60 km away in Tumkur -> OUTSIDE 20 KM RADIUS: Tests geo-filter & escalation)
         User emmaUser = createDemoUser("Emma Watson", "emma.donor@lifelink.com", "Donor123!", Role.DONOR);
         createDemoDonor(emmaUser, "A+",
                 "5 Bypass Road", "Tumkur", 13.3400, 77.1000, "+91-9876543214", true);
 
         // ====================================================================
-        // 3. Demo Emergency Request & Initial Donor Matches
+        // 3. Demo Emergency Requests & Initial Donor Matches
         // ====================================================================
+        // Request 1: City Care Hospital needs A+ blood (Critical, 2 units)
         EmergencyRequest bloodReq = new EmergencyRequest();
         bloodReq.setHospital(hospProfile);
         bloodReq.setBloodGroup("A+");
@@ -158,6 +181,25 @@ public class DemoDataInitializer implements CommandLineRunner {
         bobMatch.setContactSharingConsent(true);
         requestDonorMatchRepository.save(bobMatch);
 
+        // Request 2: Metro Trauma Center needs O+ blood (High, 1 unit)
+        EmergencyRequest metroReq = new EmergencyRequest();
+        metroReq.setHospital(metroProfile);
+        metroReq.setBloodGroup("O+");
+        metroReq.setUnitsRequired(1);
+        metroReq.setUrgency(Urgency.HIGH);
+        metroReq.setStatus(RequestStatus.ACTIVE);
+        metroReq.setCreatedAt(LocalDateTime.now().minusMinutes(8));
+        metroReq = emergencyRequestRepository.save(metroReq);
+
+        // Match 3: Fiona matched for Request 2
+        RequestDonorMatch fionaMatch = new RequestDonorMatch();
+        fionaMatch.setEmergencyRequest(metroReq);
+        fionaMatch.setDonor(fionaProfile);
+        fionaMatch.setStatus(MatchStatus.MATCHED);
+        fionaMatch.setCreatedAt(LocalDateTime.now().minusMinutes(6));
+        fionaMatch.setContactSharingConsent(false);
+        requestDonorMatchRepository.save(fionaMatch);
+
         // ====================================================================
         // 4. Sample Notifications
         // ====================================================================
@@ -169,7 +211,28 @@ public class DemoDataInitializer implements CommandLineRunner {
                 "Donor Accepted Emergency Request",
                 "Bob Rao (O-) accepted emergency blood request #" + bloodReq.getId() + " with contact sharing consent.");
 
-        log.info("[LifeLink Demo] Successfully seeded demo cluster: 1 Hospital, 5 Donors, 1 Active Request with 2 matches.");
+        createNotification(fionaUser, metroReq, NotificationType.MATCH_FOUND,
+                "Urgent Blood Match Found",
+                "Metro Trauma Center in Indiranagar urgently needs 1 unit of O+ blood. You are ~2.5 km away.");
+
+        log.info("[LifeLink Demo] Successfully seeded demo cluster: 3 Hospitals (2 verified, 1 pending), 10 Donors (covering ABO/Rh & availability), 2 Requests, 3 Matches.");
+    }
+
+    private HospitalProfile createDemoHospital(String name, String email, String password,
+                                               String regNo, String address, String city,
+                                               double lat, double lng, String phone, boolean verified) {
+        User user = createDemoUser(name, email, password, Role.HOSPITAL);
+        HospitalProfile profile = new HospitalProfile();
+        profile.setUser(user);
+        profile.setHospitalName(name);
+        profile.setRegistrationNumber(regNo);
+        profile.setAddress(address);
+        profile.setCity(city);
+        profile.setLatitude(lat);
+        profile.setLongitude(lng);
+        profile.setContactNumber(phone);
+        profile.setVerified(verified);
+        return hospitalProfileRepository.save(profile);
     }
 
     private User createDemoUser(String name, String email, String password, Role role) {

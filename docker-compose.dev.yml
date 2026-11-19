@@ -25,6 +25,10 @@ services:
     environment:
       JPA_SHOW_SQL: "true"
       SECURITY_LOG_LEVEL: "DEBUG"
+      SPRING_PROFILES_ACTIVE: "prod,demo"
+      DEMO_SEED_ENABLED: "true"
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@lifelink.com}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-AdminSecret123!}"
 
   frontend:
     # Overrides production Nginx container with Vite development server
