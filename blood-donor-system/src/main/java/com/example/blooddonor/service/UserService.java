@@ -10,11 +10,20 @@ import com.example.blooddonor.exception.AdminRegistrationNotAllowedException;
 import com.example.blooddonor.exception.EmailAlreadyRegisteredException;
 import com.example.blooddonor.exception.InvalidCredentialsException;
 import com.example.blooddonor.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+
 @Service
 public class UserService {
+
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -90,16 +99,19 @@ public class UserService {
 
         // 1. Find user by email
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() ->
-                        new InvalidCredentialsException(
-                                "Invalid email or password"
-                        ));
+                .orElseThrow(() -> {
+                    log.warn("Authentication failure - unknown user: emailHash={}, correlationId={}",
+                            hashEmail(request.getEmail()), MDC.get("correlationId"));
+                    return new InvalidCredentialsException("Invalid email or password");
+                });
 
         // 2. Check account lockout status (Brute-Force Protection - Task 9)
         java.time.LocalDateTime now = java.time.LocalDateTime.now(clock);
         if (user.getAccountLockedUntil() != null) {
             if (user.getAccountLockedUntil().isAfter(now)) {
                 long minutesRemaining = java.time.Duration.between(now, user.getAccountLockedUntil()).toMinutes() + 1;
+                log.warn("Authentication blocked - account locked: userId={}, correlationId={}",
+                        user.getId(), MDC.get("correlationId"));
                 throw new com.example.blooddonor.exception.BusinessRuleException(
                         "Account is locked due to repeated failed logins. Please try again in " + minutesRemaining + " minutes."
                 );
@@ -122,12 +134,16 @@ public class UserService {
             if (attempts >= 5) {
                 user.setAccountLockedUntil(now.plusMinutes(15));
                 userRepository.save(user);
+                log.warn("Authentication failure - account locked after {} failed attempts: userId={}, correlationId={}",
+                        attempts, user.getId(), MDC.get("correlationId"));
                 throw new com.example.blooddonor.exception.BusinessRuleException(
                         "Account is locked due to repeated failed logins. Please try again in 15 minutes."
                 );
             }
 
             userRepository.save(user);
+            log.warn("Authentication failure - invalid password: userId={}, attempt={}/5, correlationId={}",
+                    user.getId(), attempts, MDC.get("correlationId"));
 
             throw new InvalidCredentialsException(
                     "Invalid email or password"
@@ -181,6 +197,17 @@ public class UserService {
     public void logout(com.example.blooddonor.dto.RefreshTokenRequest request) {
         if (refreshTokenService != null && request != null) {
             refreshTokenService.revokeToken(request.getRefreshToken());
+        }
+    }
+
+    private static String hashEmail(String email) {
+        if (email == null) return "null";
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(email.toLowerCase().trim().getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest).substring(0, 16);
+        } catch (Exception e) {
+            return "hash_error";
         }
     }
 }

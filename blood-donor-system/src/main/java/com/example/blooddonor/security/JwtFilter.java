@@ -5,6 +5,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -16,6 +18,8 @@ import java.util.List;
 
 @Component
 public class JwtFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtFilter.class);
 
     private final JwtService jwtService;
 
@@ -48,13 +52,10 @@ public class JwtFilter extends OncePerRequestFilter {
 
             if (jwtService.isTokenValid(token)) {
 
-                System.out.println("JWT is valid");
-
                 Long userId = jwtService.extractUserId(token);
                 String role = jwtService.extractRole(token);
 
-                System.out.println("User ID: " + userId);
-                System.out.println("Role: " + role);
+                log.debug("JWT validated successfully for userId={}, role={}", userId, role);
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
@@ -64,13 +65,11 @@ public class JwtFilter extends OncePerRequestFilter {
                                         new SimpleGrantedAuthority(
                                                 "ROLE_" + role
                                         )
-                                )
+                                 )
                         );
 
                 SecurityContextHolder.getContext()
                         .setAuthentication(authentication);
-
-                System.out.println("Authentication set");
 
             } else {
 
