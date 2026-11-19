@@ -249,5 +249,18 @@ This document records the architectural, security, and infrastructure decisions 
   - In a single-instance setup, in-memory Spring `@Scheduled` execution coupled with per-request DB row-level pessimistic locking (`findByIdWithPessimisticLock`) is simple, zero-overhead, and completely concurrency-safe.
   - If horizontally scaled to multiple backend replicas, redundant executions across nodes could trigger simultaneous notifications. The planned architecture for multi-instance deployments is to introduce ShedLock (`shedlock-spring` with MySQL JDBC table `shedlock` and `@SchedulerLock(name = "escalate", lockAtMostFor = "PT5M")`).
 
+---
+
+### ADR 019: Trade-Off Analysis — Post-Commit Event Publishing vs. Transactional Outbox Pattern
+* **Context & Decision**: When an `EmergencyRequest` is created, `EmergencyRequestEventPublisher` listens for the transaction commit via `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)` and publishes `RequestCreatedEvent` to RabbitMQ.
+* **Limitation (Known Trade-Off)**: Because publishing happens strictly after MySQL transaction commit, if the RabbitMQ broker or network fails during or immediately after the commit, the request is safely persisted in the database, but message broker publication fails and no alert event is sent. Currently, there is no automatic broker retry loop for that specific dropped publication event.
+* **Alternatives Considered**:
+  - *Publish Inside Database Transaction*: Dual-write hazard. If message is published to RabbitMQ but MySQL transaction later rolls back, donors receive phantom emergency alerts for requests that do not exist.
+  - *Full Transactional Outbox Pattern*: Write an outbox record into a local MySQL `outbox_events` table within the same ACID database transaction, then use Debezium (CDC) or a polling background worker to relay messages to RabbitMQ with guaranteed at-least-once delivery.
+* **Mitigation Strategy & Roadmap Decision**:
+  1. **Background Escalation Sweeper Fallback**: The periodic escalation job (`EmergencyEscalationService.escalateUnacceptedRequests`) automatically scans active requests with 0 accepted donors and re-triggers matching and notifications, acting as a natural self-healing safety net for unnotified requests.
+  2. **Documented Enterprise Target**: The full Transactional Outbox Pattern with Debezium/Kafka is documented in the architectural roadmap for multi-datacenter enterprise high availability.
+
+
 
 
