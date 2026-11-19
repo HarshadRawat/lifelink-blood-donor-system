@@ -98,7 +98,7 @@ flowchart TD
 | **Message Broker** | RabbitMQ 3.x (Management, direct exchanges, dead-letter queues) |
 | **Observability** | Micrometer, Prometheus v3, Grafana 11, SLF4J MDC Correlation IDs |
 | **Testing & CI/CD** | Testcontainers (MySQL 8, RabbitMQ, Redis), JUnit 5, Mockito, Vitest, k6, GitHub Actions, Trivy |
-| **Containerization** | Docker, Docker Compose, Multi-stage builds, Distroless non-root images |
+| **Containerization** | Docker, Docker Compose, Multi-stage builds, Non-root runtime user (UID 10001), JRE-only image with curl healthchecks |
 
 ---
 
