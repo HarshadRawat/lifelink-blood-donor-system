@@ -47,7 +47,7 @@ ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOut
 
 # Container healthcheck using Spring Boot Actuator endpoint
 HEALTHCHECK --interval=20s --timeout=5s --start-period=35s --retries=5 \
-  CMD curl -f http://localhost:8080/actuator/health || exit 1
+  CMD curl -f http://localhost:8080/actuator/health/liveness || exit 1
 
 # Start Spring Boot application
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
