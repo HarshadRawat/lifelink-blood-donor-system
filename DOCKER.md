@@ -65,7 +65,7 @@ Ensure **Docker** and **Docker Compose** are installed:
 ### Step 3.1: Configure Environment (Optional)
 Copy the template environment file:
 ```powershell
-cp .env.docker.example .env
+cp .env.example .env
 ```
 *(The default configuration works out of the box with safe, sensible fallbacks).*
 
