@@ -241,4 +241,13 @@ This document records the architectural, security, and infrastructure decisions 
 * **Trade-Off**:
   - A strict cap guarantees zero wasted donor commutes. If an accepted donor subsequently withdraws (`ACCEPTED -> REJECTED`), the lock release and status update allows another queued donor to accept, or the escalation scheduler re-notifies nearby donors automatically.
 
+---
+
+### ADR 018: Escalation Scheduler Concurrency — Single-Instance Backend vs. ShedLock
+* **Context & Decision**: Radius escalation (`@Scheduled(fixedDelay = 60000)`) expands emergency search radius by 20 km when no donors accept after 15 minutes, tracking `last_escalated_at` to prevent premature re-escalation. In the current production architecture, LifeLink is deployed as a single backend container behind Nginx reverse proxy.
+* **Trade-Off & Scale-Out Path**:
+  - In a single-instance setup, in-memory Spring `@Scheduled` execution coupled with per-request DB row-level pessimistic locking (`findByIdWithPessimisticLock`) is simple, zero-overhead, and completely concurrency-safe.
+  - If horizontally scaled to multiple backend replicas, redundant executions across nodes could trigger simultaneous notifications. The planned architecture for multi-instance deployments is to introduce ShedLock (`shedlock-spring` with MySQL JDBC table `shedlock` and `@SchedulerLock(name = "escalate", lockAtMostFor = "PT5M")`).
+
+
 

@@ -39,6 +39,9 @@ public class EmergencyRequest {
     @Column(name = "units_fulfilled", nullable = false)
     private Integer unitsFulfilled = 0;
 
+    @Column(name = "last_escalated_at")
+    private LocalDateTime lastEscalatedAt;
+
     @Version
     private Long version;
 

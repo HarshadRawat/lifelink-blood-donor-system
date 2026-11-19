@@ -29,6 +29,13 @@ public interface EmergencyRequestRepository
             java.time.LocalDateTime expiresAt
     );
 
+    @org.springframework.data.jpa.repository.Query("SELECT r FROM EmergencyRequest r WHERE r.status = :status "
+            + "AND COALESCE(r.lastEscalatedAt, r.createdAt) < :cutoff")
+    java.util.List<EmergencyRequest> findDueForEscalation(
+            @org.springframework.data.repository.query.Param("status") RequestStatus status,
+            @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff
+    );
+
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("SELECT r FROM EmergencyRequest r WHERE r.id = :id")
     java.util.Optional<EmergencyRequest> findByIdWithPessimisticLock(
