@@ -35,6 +35,9 @@ public class UserServiceTest {
     @Mock
     private JwtService jwtService;
 
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     @InjectMocks
     private UserService userService;
 
@@ -402,5 +405,31 @@ public class UserServiceTest {
         assertEquals(0, user.getFailedLoginAttempts());
         org.junit.jupiter.api.Assertions.assertNull(user.getAccountLockedUntil());
         verify(userRepository).save(user);
+    }
+
+    @Test
+    void shouldDeleteCurrentUserSuccessfully() {
+        Long userId = 42L;
+        User user = new User();
+        user.setId(userId);
+        user.setEmail("delete@test.com");
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        userService.deleteCurrentUser(userId);
+
+        verify(refreshTokenService).revokeAllForUser(user);
+        verify(userRepository).delete(user);
+    }
+
+    @Test
+    void shouldThrowWhenDeletingNonExistentUser() {
+        Long userId = 999L;
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        assertThrows(com.example.blooddonor.exception.ResourceNotFoundException.class, () ->
+                userService.deleteCurrentUser(userId)
+        );
+        verify(userRepository, never()).delete(any());
     }
 }

@@ -34,7 +34,7 @@ A pre-seeded demonstration cluster in Central Bengaluru with active emergency re
 * **Physiological ABO/Rh Compatibility**: Enforces clinical blood transfusion rules (e.g. O- universal donor, AB+ universal recipient) directly within database index predicates.
 * **Event-Driven Asynchronous Notifications**: Decouples hospital request creation from notification dispatch via RabbitMQ with exponential retries and dead-letter queue (DLQ) fault tolerance.
 * **Real-Time Push Alerts over WebSockets**: Sub-second in-browser notifications delivered via Spring STOMP WebSockets with mid-session JWT expiration defense.
-* **Privacy-By-Design Contact Disclosure**: Donor phone numbers and emails are masked by default; unmasked contact details require explicit donor consent and generate permanent immutable audit logs.
+* **Privacy-By-Design & Right to be Forgotten**: Donor phone numbers and emails are masked by default until explicit consent is granted. Users can permanently delete their account and personal data at any time via `DELETE /api/users/me` (revoking active refresh tokens and purging profile data while preserving anonymized audit logs for regulatory compliance).
 * **Concurrency Quota Protection**: Row-level pessimistic locking (`SELECT ... FOR UPDATE`) prevents blood unit over-fulfillment under simultaneous multi-donor acceptance (proven with 32 concurrent threads).
 * **Defense-in-Depth Security**: Short-lived access tokens (15m), refresh token rotation with token family reuse invalidation, account lockout brute-force defense, and automated Trivy vulnerability scanning.
 

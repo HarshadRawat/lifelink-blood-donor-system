@@ -153,6 +153,13 @@ public class RefreshTokenService {
         }
     }
 
+    @Transactional
+    public void revokeAllForUser(User user) {
+        if (user != null) {
+            refreshTokenRepository.revokeAllForUser(user);
+        }
+    }
+
     private String generateSecureToken() {
         byte[] randomBytes = new byte[32];
         secureRandom.nextBytes(randomBytes);

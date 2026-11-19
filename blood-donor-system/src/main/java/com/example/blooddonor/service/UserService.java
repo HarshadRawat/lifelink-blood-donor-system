@@ -200,6 +200,19 @@ public class UserService {
         }
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    public void deleteCurrentUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new com.example.blooddonor.exception.ResourceNotFoundException("User not found with id: " + userId));
+
+        if (refreshTokenService != null) {
+            refreshTokenService.revokeAllForUser(user);
+        }
+
+        userRepository.delete(user);
+        log.info("User account deleted successfully: userId={}, correlationId={}", userId, MDC.get("correlationId"));
+    }
+
     private static String hashEmail(String email) {
         if (email == null) return "null";
         try {
