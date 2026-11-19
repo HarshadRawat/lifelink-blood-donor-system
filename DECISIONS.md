@@ -261,6 +261,30 @@ This document records the architectural, security, and infrastructure decisions 
   1. **Background Escalation Sweeper Fallback**: The periodic escalation job (`EmergencyEscalationService.escalateUnacceptedRequests`) automatically scans active requests with 0 accepted donors and re-triggers matching and notifications, acting as a natural self-healing safety net for unnotified requests.
   2. **Documented Enterprise Target**: The full Transactional Outbox Pattern with Debezium/Kafka is documented in the architectural roadmap for multi-datacenter enterprise high availability.
 
+---
+
+### ADR 020: Deployment Topology — Cloud VM with Docker Compose & Caddy vs. PaaS
+* **Context & Decision**: LifeLink operates a full-stack emergency system composed of 5 coordinated services: React frontend (Nginx), Spring Boot backend, MySQL 8.0, Redis 7, and RabbitMQ 3. We chose a single cloud VM running Docker Compose with Caddy as the automated HTTPS reverse proxy over heterogeneous free-tier PaaS providers (e.g. Render/Vercel).
+* **Rationale & Alternatives Considered**:
+  - *Free-Tier PaaS Platforms*: Free tiers frequently sleep idle containers (inducing 60-second cold-start latency unacceptable for emergency medical requests), terminate long-lived WebSocket connections after short timeouts, lack native MySQL databases (requiring external third-party database subscriptions), and split traffic across public internet endpoints rather than private subnets.
+  - *Cloud VM with Docker Compose & Caddy*: Provides a unified private bridge network (`172.28.0.0/16`), automated zero-configuration Let's Encrypt TLS certificates, predictable memory quotas, persistent WebSocket STOMP connections, and zero platform vendor lock-in.
+
+---
+
+### ADR 021: Auxiliary Dependency Resilience — Fail-Open Architecture for Redis & RabbitMQ
+* **Context & Decision**: In life-critical emergency medical dispatch, core blood matching and database persistence must survive temporary outages of auxiliary infrastructure. We enforce a fail-open resiliency posture:
+  - *Redis Rate Limiting*: If Redis is unreachable, `RateLimitingFilter` fails open, logging the incident while preventing legitimate donors or hospitals from being locked out of emergency services.
+  - *Container Health Probes*: Liveness (`/actuator/health/liveness`) depends solely on the Spring Boot process state, while readiness (`/actuator/health/readiness`) checks core database availability. Auxiliary Redis or RabbitMQ alerts do not cause container orchestrators to kill a healthy backend.
+
+---
+
+### ADR 022: Schema Evolution — Explicit Flyway Migrations for MySQL ENUMs vs. Hibernate DDL
+* **Context & Decision**: In production, LifeLink strictly enforces `jpa.hibernate.ddl-auto=validate` and manages all schema changes through Flyway versioned scripts (V1 through V6).
+* **Rationale**:
+  - MySQL stores Java enums as column-level `ENUM('ACTIVE','CANCELLED',...)` data types. Adding a new application enum value (such as `EXPIRED` in `RequestStatus`) requires an explicit `ALTER TABLE emergency_requests MODIFY COLUMN status ENUM(...)` migration.
+  - While in-memory H2 databases quietly treat enums as generic VARCHAR columns during local tests, omitting an explicit Flyway migration results in silent data truncation or hard SQL exceptions in real MySQL environments. Versioned Flyway migrations guarantee complete parity between development, CI Testcontainers, and production.
+
+
 
 
 
