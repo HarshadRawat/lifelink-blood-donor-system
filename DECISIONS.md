@@ -203,3 +203,31 @@ This document records the architectural, security, and infrastructure decisions 
   - *Standardized Prometheus Metric Format*: Enables out-of-the-box compatibility with Kubernetes, Grafana Cloud, Datadog, or standalone Prometheus without proprietary agent lock-in.
 * **Trade-Off**:
   - Thread-local MDC requires strict lifecycle management (clearing on request completion) to avoid context bleeding when threads are returned to servlet worker pools.
+
+---
+
+### ADR 015: Trade-Off Analysis — Account Lockout vs. Denial-of-Service (DoS) Abuse
+* **Context & Decision**: When an account records 5 consecutive failed password verification attempts, `UserService` locks the account for 15 minutes (`account_locked_until`), returning HTTP 409/423 to subsequent login attempts.
+* **Limitation (Known Trade-Off)**: An attacker who knows or discovers a victim's email address could deliberately send 5 incorrect passwords to temporarily lock the victim out of their account, resulting in an account-level Denial of Service.
+* **Alternatives Considered**:
+  - Relying exclusively on IP-based rate limiting (leaves individual accounts vulnerable to distributed credential stuffing from botnets).
+  - CAPTCHA challenge after 3 failed attempts (effective, but introduces external third-party dependencies and degrades user experience in emergency hospital scenarios).
+  - Permanent lockout requiring administrator unlock (severe DoS blast radius).
+* **Mitigation Strategy**:
+  1. **Dual-Layer Throttle**: IP-based rate limiting (`RateLimitingFilter` enforcing 10 req/60s per IP) prevents single bad actors from rapidly locking out multiple victim accounts.
+  2. **Short, Self-Healing Window**: Lockout duration is capped at 15 minutes, allowing legitimate users to regain access automatically without human support overhead.
+  3. **Privacy-Preserving Audit Logs**: Every failed attempt and lockout is logged with SHA-256 hashed email identifier and correlation ID to facilitate SIEM anomaly detection without leaking PII.
+
+---
+
+### ADR 016: Trade-Off Analysis — Frame-Driven WebSocket Token Expiry vs. Server Push Disconnection
+* **Context & Decision**: `WebSocketAuthInterceptor` extracts `tokenExpiresAt` from JWT claims upon `CONNECT` and caches it in STOMP session attributes. Inbound frames (`SUBSCRIBE`, `SEND`) are intercepted and rejected with `MessageDeliveryException` if `Instant.now().isAfter(tokenExpiresAt)`.
+* **Limitation (Known Trade-Off)**: STOMP channel interceptors evaluate security during client-to-server frame transmission. If a donor connects, subscribes to `/topic/emergency`, and leaves their client idle, outbound server-to-client push broadcasts (`convertAndSend`) continue until the client sends a frame or the connection is terminated.
+* **Alternatives Considered**:
+  - Background scheduled thread sweeping all active STOMP session IDs and calling `session.close()` when JWT expires (adds high memory tracking and concurrency overhead in high-connection clusters).
+  - Mid-session token renewal frames over custom STOMP protocols (increases client-side complexity).
+* **Mitigation Strategy**:
+  1. **Frontend Proactive Reconnection**: The frontend `api/client.js` Axios and STOMP client automatically refreshes the short-lived access token every 15 minutes and reconnects the WebSocket client with the fresh bearer token.
+  2. **STOMP Heartbeats**: Standard STOMP ping/pong heartbeats ensure the TCP connection is actively probed, limiting stale idle sockets.
+  3. Documenting this limitation provides full architectural transparency while keeping the messaging layer resilient and lightweight.
+
