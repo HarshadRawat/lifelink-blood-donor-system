@@ -231,3 +231,14 @@ This document records the architectural, security, and infrastructure decisions 
   2. **STOMP Heartbeats**: Standard STOMP ping/pong heartbeats ensure the TCP connection is actively probed, limiting stale idle sockets.
   3. Documenting this limitation provides full architectural transparency while keeping the messaging layer resilient and lightweight.
 
+---
+
+### ADR 017: Donor Acceptance Quota Policy — Strict Cap vs. Over-Acceptance Buffer
+* **Context & Decision**: When donors respond to emergency broadcasts, multiple donors may click "Accept" in near-simultaneous succession. We enforce an exact quota check serialized on the `EmergencyRequest` row lock: `countByEmergencyRequestAndStatusIn(ACCEPTED, COMPLETED) < unitsRequired`. Once accepted count matches `unitsRequired`, subsequent accept attempts are rejected with HTTP 409 Conflict ("Enough donors have already accepted").
+* **Alternatives Considered**:
+  - *Permissive Buffer (unitsRequired + 1 or +2)*: Accepts backup donors in case an accepted donor fails to arrive. However, in urban emergency blood systems, donors incur physical travel costs and emotional commitment; allowing excess acceptances and later turning donors away at the clinic causes donor fatigue and distrust.
+  - *Unbounded Acceptance with First-to-Arrive Completion*: Leads to massive over-fulfillment conflicts and wasted donor goodwill.
+* **Trade-Off**:
+  - A strict cap guarantees zero wasted donor commutes. If an accepted donor subsequently withdraws (`ACCEPTED -> REJECTED`), the lock release and status update allows another queued donor to accept, or the escalation scheduler re-notifies nearby donors automatically.
+
+

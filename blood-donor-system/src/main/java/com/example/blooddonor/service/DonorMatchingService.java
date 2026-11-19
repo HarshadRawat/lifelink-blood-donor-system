@@ -7,13 +7,15 @@ import com.example.blooddonor.dto.MatchStatusRequest;
 import com.example.blooddonor.dto.RequestDonorMatchResponse;
 import com.example.blooddonor.entity.*;
 import com.example.blooddonor.exception.BusinessRuleException;
+import com.example.blooddonor.exception.ForbiddenOperationException;
+import com.example.blooddonor.exception.ResourceNotFoundException;
 import com.example.blooddonor.repository.ContactUnlockAuditLogRepository;
 import com.example.blooddonor.repository.DonorProfileRepository;
 import com.example.blooddonor.repository.EmergencyRequestRepository;
 import com.example.blooddonor.repository.RequestDonorMatchRepository;
 import com.example.blooddonor.repository.UserRepository;
-import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -263,6 +265,7 @@ public class DonorMatchingService {
                 .toList();
     }
 
+    @Transactional
     public RequestDonorMatchResponse updateMatchStatus(
             Long matchId,
             MatchStatusRequest request,
@@ -272,55 +275,79 @@ public class DonorMatchingService {
         RequestDonorMatch match =
                 requestDonorMatchRepository.findById(matchId)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Match not found"));
 
-        // 2. Get the emergency request
-        EmergencyRequest emergencyRequest =
-                match.getEmergencyRequest();
-
-        // 3. Prevent donor from accepting an inactive request
-        if (request.getStatus() == MatchStatus.ACCEPTED &&
-                emergencyRequest.getStatus() != RequestStatus.ACTIVE) {
-
-            throw new BusinessRuleException(
-                    "This emergency request is no longer active");
-        }
-
-        // 4. Verify that this match belongs to the logged-in donor
+        // 2. Verify that this match belongs to the logged-in donor
         Long matchDonorUserId =
                 match.getDonor().getUser().getId();
 
         if (!matchDonorUserId.equals(userId)) {
-            throw new RuntimeException(
-                    "You are not authorized to update this match");
+            throw new ForbiddenOperationException(
+                    "You cannot update this match");
         }
 
-        // 5. Allow only ACCEPTED or REJECTED
-        MatchStatus status = request.getStatus();
+        // 3. Serialize on the request row via pessimistic lock
+        Long reqId = match.getEmergencyRequest().getId();
+        EmergencyRequest emergencyRequest =
+                emergencyRequestRepository.findByIdWithPessimisticLock(reqId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Request not found"));
 
-        if (status != MatchStatus.ACCEPTED &&
-                status != MatchStatus.REJECTED) {
+        if (entityManager != null) {
+            entityManager.refresh(match);
+        }
 
-            throw new RuntimeException(
+        // 4. Validate transition state machine
+        MatchStatus from = match.getStatus();
+        MatchStatus to = request.getStatus();
+
+        if (to != MatchStatus.ACCEPTED &&
+                to != MatchStatus.REJECTED) {
+            throw new BusinessRuleException(
                     "Invalid match status");
         }
 
-        // 6. Update status and consent
-        match.setStatus(status);
-        if (status == MatchStatus.ACCEPTED) {
+        boolean legal = (from == MatchStatus.MATCHED || from == MatchStatus.NOTIFIED)
+                || (from == MatchStatus.ACCEPTED && to == MatchStatus.REJECTED); // donor may withdraw
+
+        if (!legal) {
+            throw new BusinessRuleException(
+                    "Match is already " + from);
+        }
+
+        if (to == MatchStatus.ACCEPTED) {
+            if (emergencyRequest.getStatus() != RequestStatus.ACTIVE
+                    || (emergencyRequest.getExpiresAt() != null && emergencyRequest.getExpiresAt().isBefore(LocalDateTime.now(clock)))) {
+                throw new BusinessRuleException(
+                        "This emergency request is no longer active");
+            }
+
+            long taken = requestDonorMatchRepository.countByEmergencyRequestAndStatusIn(
+                    emergencyRequest,
+                    List.of(MatchStatus.ACCEPTED, MatchStatus.COMPLETED));
+
+            if (taken >= emergencyRequest.getUnitsRequired()) {
+                throw new BusinessRuleException(
+                        "Enough donors have already accepted");
+            }
+        }
+
+        // 5. Update status and consent
+        match.setStatus(to);
+        if (to == MatchStatus.ACCEPTED) {
             boolean consent = request.getConsentToShareContact() != null ? request.getConsentToShareContact() : true;
             match.setContactSharingConsent(consent);
         } else {
             match.setContactSharingConsent(false);
         }
 
-        // 7. Save
+        // 6. Save
         RequestDonorMatch updatedMatch =
                 requestDonorMatchRepository.save(match);
 
-        if (status == MatchStatus.ACCEPTED) {
-
+        if (to == MatchStatus.ACCEPTED) {
             User hospitalUser =
                     emergencyRequest.getHospital().getUser();
 
@@ -332,10 +359,7 @@ public class DonorMatchingService {
                     emergencyRequest,
                     donorUser
             );
-        }
-
-        if (status == MatchStatus.REJECTED) {
-
+        } else if (to == MatchStatus.REJECTED) {
             User hospitalUser =
                     emergencyRequest.getHospital().getUser();
 
@@ -349,36 +373,29 @@ public class DonorMatchingService {
             );
         }
 
-        // 8. Convert to response DTO
+        // 7. Convert to response DTO
         RequestDonorMatchResponse response =
                 new RequestDonorMatchResponse();
 
         response.setId(updatedMatch.getId());
-
         response.setEmergencyRequestId(
                 updatedMatch.getEmergencyRequest().getId()
         );
-
         response.setDonorId(
                 updatedMatch.getDonor().getId()
         );
-
         response.setDonorName(
                 updatedMatch.getDonor().getUser().getName()
         );
-
         response.setBloodGroup(
                 updatedMatch.getDonor().getBloodGroup()
         );
-
         response.setStatus(
                 updatedMatch.getStatus()
         );
-
         response.setCreatedAt(
                 updatedMatch.getCreatedAt()
         );
-
         response.setContactSharingConsent(
                 updatedMatch.getContactSharingConsent()
         );
@@ -395,7 +412,7 @@ public class DonorMatchingService {
         RequestDonorMatch match =
                 requestDonorMatchRepository.findById(matchId)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Match not found"));
 
         // 2. Find the hospital that owns this request
@@ -407,26 +424,23 @@ public class DonorMatchingService {
 
         // 3. Verify logged-in hospital
         if (!hospitalUserId.equals(userId)) {
-            throw new RuntimeException(
+            throw new ForbiddenOperationException(
                     "You are not authorized to complete this match");
         }
 
         // 4. Match must be ACCEPTED
         if (match.getStatus() != MatchStatus.ACCEPTED) {
-            throw new RuntimeException(
+            throw new BusinessRuleException(
                     "Only an accepted match can be completed");
         }
 
         // 5. Prevent over-fulfillment: serialize completions via pessimistic row-lock on EmergencyRequest
         Long reqId = match.getEmergencyRequest().getId();
         EmergencyRequest emergencyRequest = emergencyRequestRepository.findByIdWithPessimisticLock(reqId)
-                .orElse(match.getEmergencyRequest());
+                .orElseThrow(() -> new ResourceNotFoundException("Request not found"));
 
         if (entityManager != null) {
-            try {
-                entityManager.refresh(emergencyRequest, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
-            } catch (Exception ignored) {
-            }
+            entityManager.refresh(emergencyRequest, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         }
 
         int fulfilled = emergencyRequest.getUnitsFulfilled() != null ? emergencyRequest.getUnitsFulfilled() : 0;

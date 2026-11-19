@@ -6,6 +6,7 @@ import com.example.blooddonor.entity.MatchStatus;
 import com.example.blooddonor.entity.RequestDonorMatch;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface RequestDonorMatchRepository
@@ -19,6 +20,11 @@ public interface RequestDonorMatchRepository
     long countByEmergencyRequestAndStatus(
             EmergencyRequest emergencyRequest,
             MatchStatus status
+    );
+
+    long countByEmergencyRequestAndStatusIn(
+            EmergencyRequest emergencyRequest,
+            Collection<MatchStatus> statuses
     );
 
     long countByStatus(MatchStatus status);
