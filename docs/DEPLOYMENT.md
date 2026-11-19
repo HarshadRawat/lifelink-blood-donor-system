@@ -169,7 +169,6 @@ When running with profile `demo` or `DEMO_SEED_ENABLED=true`, LifeLink automatic
 | 🩸 **Donor 3 (Excluded - ABO)** | `charlie.donor@lifelink.com` | `Donor123!` | **Charlie Kumar** (B+, 12.9250, 77.5850). ~4.5 km away, excluded due to ABO incompatibility. |
 | 🩸 **Donor 4 (Excluded - ABO)** | `david.donor@lifelink.com` | `Donor123!` | **David Fernandes** (AB+, 12.9780, 77.6400). ~6.5 km away, AB+ universal recipient. |
 | 🩸 **Donor 5 (Excluded - Distance)** | `emma.donor@lifelink.com` | `Donor123!` | **Emma Watson** (A+, 13.3400, 77.1000). Located in Tumkur (**~60 km** away, outside the 20 km radius). |
-| 🛡️ **Admin** | `admin@lifelink.com` | `Admin123` | System oversight, metrics, and user management. |
 
 > [!NOTE]
 > Demo accounts can also be instantly auto-filled on the login screen using the **⚡ Quick Demo Logins** button panel.

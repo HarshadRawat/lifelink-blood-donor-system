@@ -25,7 +25,6 @@ A pre-seeded demonstration cluster in Central Bengaluru with active emergency re
 | **Donor (Direct Match)** | `alice.donor@lifelink.com` | `Donor123!` | A+ donor, 0.5 km away, pending emergency broadcast alert |
 | **Donor (Universal)** | `bob.donor@lifelink.com` | `Donor123!` | O- donor, 0.8 km away, accepted with contact sharing consent granted |
 | **Donor (Incompatible)** | `charlie.donor@lifelink.com` | `Donor123!` | B+ donor, 4.5 km away, filtered out by ABO compatibility engine |
-| **Admin** | `admin@lifelink.com` | `Admin123!` | Platform health metrics, hospital verification queue (`/api/admin`) |
 
 ---
 

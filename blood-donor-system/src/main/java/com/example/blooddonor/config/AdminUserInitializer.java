@@ -18,10 +18,10 @@ public class AdminUserInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${app.admin.email:admin@lifelink.com}")
+    @Value("${app.admin.email:}")
     private String adminEmail;
 
-    @Value("${app.admin.password:Admin123}")
+    @Value("${app.admin.password:}")
     private String adminPassword;
 
     public AdminUserInitializer(UserRepository userRepository, PasswordEncoder passwordEncoder) {
@@ -31,15 +31,20 @@ public class AdminUserInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        if (adminPassword == null || adminPassword.isBlank()) {
+            log.warn("No app.admin.password configured. Skipping administrative account initialization.");
+            return;
+        }
+
         if (!userRepository.existsByRole(Role.ADMIN)) {
             User admin = new User();
             admin.setName("LifeLink System Admin");
-            admin.setEmail(adminEmail);
+            admin.setEmail(adminEmail != null && !adminEmail.isBlank() ? adminEmail : "admin@lifelink.com");
             admin.setPassword(passwordEncoder.encode(adminPassword));
             admin.setRole(Role.ADMIN);
 
             userRepository.save(admin);
-            log.info("Initialized default administrative account: {}", adminEmail);
+            log.info("Initialized default administrative account: {}", admin.getEmail());
         }
     }
 }

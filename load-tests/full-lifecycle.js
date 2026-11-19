@@ -22,8 +22,11 @@ export const options = {
 };
 
 const BASE_URL = __ENV.BASE || 'http://localhost:8080';
-const EMAIL = __ENV.LOGIN_EMAIL || 'admin@lifelink.com';
-const PASSWORD = __ENV.LOGIN_PASSWORD || 'Admin123';
+const EMAIL = __ENV.LOGIN_EMAIL || 'hospital@lifelink.com';
+const PASSWORD = __ENV.LOGIN_PASSWORD;
+if (!PASSWORD) {
+  throw new Error('LOGIN_PASSWORD environment variable is required (no default password permitted)');
+}
 
 export default function () {
   let token = '';

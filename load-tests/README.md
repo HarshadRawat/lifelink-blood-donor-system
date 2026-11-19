@@ -60,7 +60,7 @@ k6 run `
 k6 run `
   -e BASE="http://localhost:8080" `
   -e LOGIN_EMAIL="admin@lifelink.com" `
-  -e LOGIN_PASSWORD="Admin123" `
+  -e LOGIN_PASSWORD="<your_secure_password>" `
   load-tests/login.js
 ```
 
