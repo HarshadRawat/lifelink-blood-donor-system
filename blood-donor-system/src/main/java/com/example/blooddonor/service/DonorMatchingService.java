@@ -226,7 +226,7 @@ public class DonorMatchingService {
                 .toList();
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public RequestDonorMatchResponse updateMatchStatus(
             Long matchId,
             MatchStatusRequest request,
