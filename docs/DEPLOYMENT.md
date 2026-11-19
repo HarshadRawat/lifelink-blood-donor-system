@@ -6,134 +6,100 @@ This guide details the deployment options, environment variables, security confi
 
 ## 1. Deployment Architecture Overview
 
-LifeLink supports two production deployment models:
+LifeLink's production architecture is designed for deployment on a single cloud VM running Docker Compose behind Caddy for automated TLS/HTTPS:
 
 ```mermaid
 flowchart TD
-    subgraph OptionA ["Model A: Single-Host Unified VM (Recommended)"]
-        UserA["Browser Client (HTTPS / WSS)"] --> NginxA["Nginx 1.27 + Let's Encrypt SSL (Port 443)"]
-        NginxA -->|Static SPA /| FrontA["React 19 Frontend"]
-        NginxA -->|Proxy /api, /actuator| BackA["Spring Boot 4 Monolith (Port 8080)"]
-        NginxA -->|Proxy /ws (HTTP Upgrade)| BackA
-        BackA --> DB_A[("MySQL 8.0 (Port 3306)")]
-    end
-
-    subgraph OptionB ["Model B: Decoupled PaaS Architecture"]
-        UserB["Browser Client"] --> Vercel["Vercel / Netlify (Frontend CDN)"]
-        Vercel -->|REST HTTPS & WSS| Render["Render / Railway (Spring Boot Container)"]
-        Render --> CloudDB[("Aiven / Railway Cloud MySQL 8.0")]
-    end
+    Client["Browser / Mobile Client (HTTPS / WSS)"] -->|Ports 80 & 443| Caddy["Caddy 2 Reverse Proxy (Automated TLS / Let's Encrypt)"]
+    Caddy -->|Reverse Proxy Port 80| Nginx["Nginx Gateway (Frontend Container)"]
+    Nginx -->|Static SPA / HTML / JS| ReactApp["React 19 Frontend"]
+    Nginx -->|Proxy /api, /actuator/health| Backend["Spring Boot 4 Backend (:8080)"]
+    Nginx -->|Upgrade /ws| Backend
+    Backend --> MySQL[("MySQL 8.0 (:3306)")]
+    Backend --> Redis[("Redis 7 (:6379)")]
+    Backend --> RabbitMQ[("RabbitMQ (:5672)")]
 ```
+
+> [!NOTE]
+> In this architecture, **only Caddy publishes ports (80 and 443)** to the public internet. All internal services (`mysql`, `redis`, `rabbitmq`, and `backend`) reside strictly within the internal Docker bridge network (`172.28.0.0/16`).
 
 ---
 
-## 2. Option A: Cloud VM Deployment (AWS EC2 / Oracle Cloud / DigitalOcean)
+## 2. Recommended Production Deployment: Cloud VM with Caddy HTTPS
 
-This is the simplest, most robust path for a student or enterprise deployment because the entire stack runs in an isolated Docker network behind Nginx, guaranteeing that WebSockets, REST APIs, and static assets work seamlessly on a single domain.
+A cloud virtual machine (e.g. AWS EC2 t3.small, Oracle Cloud Always Free ARM/x86, DigitalOcean Droplet, or Hetzner VPS with >= 2 GB RAM) provides the ideal environment for LifeLink. It avoids the cold-start delays, WebSocket termination limits, and missing MySQL support of free-tier PaaS offerings.
 
 ### Step 1: Provision Cloud VM & Install Docker
-Provision an Ubuntu 22.04 / 24.04 LTS instance (e.g., AWS t3.small, Oracle Cloud Always-Free ARM/AMD, or DigitalOcean Droplet) and install Docker:
+Provision an Ubuntu 22.04 or 24.04 LTS instance. Configure the cloud security group / firewall to open:
+- Port `22` (SSH - restricted to your administrator IP)
+- Port `80` (HTTP - required for ACME challenge and HTTP-to-HTTPS redirect)
+- Port `443` (HTTPS - public secure traffic)
 
+Install Docker and Caddy:
 ```bash
-sudo apt update && sudo apt install -y docker.io docker-compose-plugin git certbot
+sudo apt update && sudo apt install -y docker.io docker-compose-plugin git caddy
 sudo usermod -aG docker $USER
 ```
 
-### Step 2: Clone Repository & Create `.env`
+### Step 2: Configure Caddy Reverse Proxy with Automatic HTTPS
+Point your domain or free dynamic DNS hostname (e.g. `lifelink.yourdomain.com`) to the VM's public IP address via an `A` record.
+
+Edit `/etc/caddy/Caddyfile`:
+```caddyfile
+lifelink.yourdomain.com {
+    reverse_proxy 127.0.0.1:80 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+    }
+}
+```
+Reload Caddy:
+```bash
+sudo systemctl reload caddy
+```
+Caddy will automatically provision and renew zero-configuration Let's Encrypt / ZeroSSL TLS certificates.
+
+### Step 3: Clone Repository & Configure Environment
 ```bash
 git clone https://github.com/HarshadRawat/lifelink-blood-donor-system.git
 cd lifelink-blood-donor-system
 
-# Create secure production environment file
-cat << 'EOF' > .env
-PORT=8080
-FRONTEND_PORT=80
-MYSQL_PORT=3307
+# Create .env from template
+cp .env.example .env
 
-# Spring Profiles: 'prod' activates strict validation; 'demo' seeds sample users
-SPRING_PROFILES_ACTIVE=prod,demo
-
-# MySQL Database Credentials
-DB_ROOT_PASSWORD=replace_with_strong_root_password_32char
-DB_USER=lifelink_prod_user
-DB_PASSWORD=replace_with_strong_user_password_32char
-DB_URL=jdbc:mysql://mysql:3306/blood_donor_system?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-DB_USERNAME=root
-
-# Hibernate & Flyway
-JPA_DDL_AUTO=validate
-FLYWAY_ENABLED=true
-FLYWAY_BASELINE_ON_MIGRATE=false
-
-# Cryptographic Keys (Generate with: openssl rand -base64 48)
-JWT_SECRET=replace_with_a_64_character_random_hex_or_base64_secret_key!
-JWT_EXPIRATION_MS=86400000
-
-# Rate Limiting & Proxies
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_LOGIN_MAX=10
-RATE_LIMIT_LOGIN_WINDOW=60
-RATE_LIMIT_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12
-
-# Admin Initial Seed
-ADMIN_EMAIL=admin@lifelink.com
-ADMIN_PASSWORD=replace_with_strong_admin_password
-
-# Demo Seeding
-DEMO_SEED_ENABLED=true
-EOF
+# Generate secure cryptographic secrets
+openssl rand -base64 48
 ```
+Edit `.env` and fill in strong passwords for:
+- `JWT_SECRET`: Minimum 32 characters (e.g. generated via `openssl rand -base64 48`)
+- `DB_ROOT_PASSWORD` and `DB_PASSWORD`: Strong unique database passwords
+- `REDIS_PASSWORD` and `RABBITMQ_PASSWORD`: Authentication credentials for cache and broker
+- `CORS_ALLOWED_ORIGINS`: Set to your exact domain (`https://lifelink.yourdomain.com`)
 
-### Step 3: Launch Services with Docker Compose
+### Step 4: Launch Production Stack
 ```bash
+# Production mode (clean database, no demo records):
 docker compose up -d --build
+
+# Or with pre-seeded demo records for live evaluation:
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
 ```
 
-### Step 4: Configure HTTPS & SSL (Certbot / Nginx Host Proxy)
-Point your DNS `A` record (e.g., `lifelink.example.com`) to your server IP. Install Nginx and obtain a Let's Encrypt certificate:
-
+### Step 5: Verify Deployment and Client IP Propagation
+Verify that all 5 services report healthy:
 ```bash
-sudo apt install -y nginx python3-certbot-nginx
-sudo certbot --nginx -d lifelink.example.com
+docker compose ps
 ```
-
-Add the following reverse-proxy configuration inside `/etc/nginx/sites-available/lifelink`:
-
+Behind Caddy, Nginx receives the client IP via `X-Forwarded-For`. Nginx uses:
 ```nginx
-server {
-    server_name lifelink.example.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:80;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-    }
-
-    # Sustained WebSocket STOMP Connection
-    location /ws {
-        proxy_pass http://127.0.0.1:80;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-    }
-
-    listen 443 ssl;
-    # Managed by Certbot SSL certificates...
-}
+set_real_ip_from 172.28.0.0/16;
+set_real_ip_from 127.0.0.1;
+real_ip_header X-Forwarded-For;
+proxy_set_header X-Forwarded-For $remote_addr;
 ```
-
-Reload Nginx:
-```bash
-sudo nginx -s reload
-```
+This ensures Spring Boot's CIDR-aware `ClientIpResolver` accurately inspects the true end-user IP for audit logs and rate-limiting (`rl:login:<real_ip>`), completely immune to IP spoofing.
 
 ---
 
