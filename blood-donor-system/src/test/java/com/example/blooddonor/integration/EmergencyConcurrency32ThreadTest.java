@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-class EmergencyConcurrency32ThreadIT extends AbstractMySqlIT {
+class EmergencyConcurrency32ThreadTest extends AbstractMySqlIT {
 
     @Autowired
     private MockMvc mockMvc;
