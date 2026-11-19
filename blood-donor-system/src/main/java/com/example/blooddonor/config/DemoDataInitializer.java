@@ -62,9 +62,11 @@ public class DemoDataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         boolean isDemoProfile = Arrays.asList(environment.getActiveProfiles()).contains("demo");
-        if (!demoSeedEnabled && !isDemoProfile) {
-            log.debug("Demo data seeding is disabled (profile: {}, app.demo.seed: {})",
-                    Arrays.toString(environment.getActiveProfiles()), demoSeedEnabled);
+        if (demoSeedEnabled && !isDemoProfile) {
+            throw new IllegalStateException("Demo data seeding requested (app.demo.seed=true) but 'demo' Spring profile is not active.");
+        }
+        if (!isDemoProfile) {
+            log.debug("Demo data seeding is disabled (demo profile is not active).");
             return;
         }
 

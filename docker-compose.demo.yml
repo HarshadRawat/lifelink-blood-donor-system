@@ -1,0 +1,16 @@
+# ====================================================================
+# LifeLink - Demo Mode Docker Compose Override
+# ====================================================================
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
+# ====================================================================
+
+services:
+  backend:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod,demo
+      DEMO_SEED_ENABLED: "true"
+  frontend:
+    build:
+      args:
+        VITE_DEMO_MODE: "true"
