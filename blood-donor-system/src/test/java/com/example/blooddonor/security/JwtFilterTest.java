@@ -34,7 +34,7 @@ class JwtFilterTest {
     @BeforeEach
     void setUp() {
 
-        jwtService = new JwtService();
+        jwtService = new JwtService("test-secret-key-at-least-32-characters-long", 900000L);
 
         jwtFilter = new JwtFilter(jwtService);
 
@@ -265,11 +265,10 @@ class JwtFilterTest {
                 );
 
 
-        String tamperedToken =
-                token.substring(
-                        0,
-                        token.length() - 1
-                ) + "X";
+        int splitIdx = token.lastIndexOf('.');
+        char charToFlip = token.charAt(splitIdx + 1);
+        char flipped = (charToFlip == 'A') ? 'B' : 'A';
+        String tamperedToken = token.substring(0, splitIdx + 1) + flipped + token.substring(splitIdx + 2);
 
 
         request.addHeader(

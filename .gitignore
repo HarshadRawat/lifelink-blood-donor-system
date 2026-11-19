@@ -35,7 +35,10 @@ coverage/
 **/.env.*.local
 !.env.example
 !**/.env.example
-!.env.docker.example
+application-dev.properties
+**/application-dev.properties
+!application-dev.properties.example
+!**/application-dev.properties.example
 *.pem
 *.key
 *.cert

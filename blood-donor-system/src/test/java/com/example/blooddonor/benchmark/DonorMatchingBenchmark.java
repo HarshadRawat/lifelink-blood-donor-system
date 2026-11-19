@@ -19,7 +19,7 @@ public class DonorMatchingBenchmark {
     private static final String DEFAULT_URL =
             "jdbc:mysql://localhost:3306/lifelink_benchmark?rewriteBatchedStatements=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
     private static final String DEFAULT_USER = "root";
-    private static final String DEFAULT_PASS = "Sabby3924";
+    private static final String DEFAULT_PASS = System.getenv("BENCH_DB_PASSWORD") != null ? System.getenv("BENCH_DB_PASSWORD") : "";
     private static final int TOTAL_DONORS = 100_000;
     private static final int BATCH_SIZE = 2_500;
     private static final int BENCHMARK_RUNS = 10;

@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class JwtServiceTest {
 
-    private final JwtService jwtService = new JwtService();
+    private final JwtService jwtService = new JwtService("test-secret-key-at-least-32-characters-long", 900000L);
 
 
     // =========================================================
@@ -84,10 +84,11 @@ class JwtServiceTest {
         String token =
                 jwtService.generateToken(9L, "DONOR");
 
-        char lastChar = token.charAt(token.length() - 1);
-        char replacement = (lastChar == 'X') ? 'Y' : 'X';
-        String tamperedToken =
-                token.substring(0, token.length() - 1) + replacement;
+        // Tamper with the signature portion
+        int splitIdx = token.lastIndexOf('.');
+        char charToFlip = token.charAt(splitIdx + 1);
+        char flipped = (charToFlip == 'A') ? 'B' : 'A';
+        String tamperedToken = token.substring(0, splitIdx + 1) + flipped + token.substring(splitIdx + 2);
 
         assertFalse(
                 jwtService.isTokenValid(tamperedToken)
