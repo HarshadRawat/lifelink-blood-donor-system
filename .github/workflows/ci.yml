@@ -150,6 +150,21 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
 
+      - name: Build Backend Container Image for Image Scan
+        run: docker build -t lifelink-backend:scan ./blood-donor-system
+
+      - name: Run Trivy Vulnerability Scanner (Backend Image)
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          scan-type: 'image'
+          image-ref: 'lifelink-backend:scan'
+          ignore-unfixed: true
+          format: 'table'
+          severity: 'CRITICAL'
+          exit-code: '1'
+
   # ------------------------------------------------------------------
   # 5. Container Publishing to GitHub Container Registry (ghcr.io)
   # ------------------------------------------------------------------

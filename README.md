@@ -1,7 +1,7 @@
 # LifeLink — Emergency Blood Donor Matching
 
 [![CI](https://github.com/HarshadRawat/lifelink-blood-donor-system/actions/workflows/ci.yml/badge.svg)](https://github.com/HarshadRawat/lifelink-blood-donor-system/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/Coverage-89.8%25%20(JaCoCo)-brightgreen.svg)](blood-donor-system/target/site/jacoco/index.html)
+[![codecov](https://codecov.io/gh/HarshadRawat/lifelink-blood-donor-system/branch/main/graph/badge.svg)](https://codecov.io/gh/HarshadRawat/lifelink-blood-donor-system)
 [![Java](https://img.shields.io/badge/Java-17%2B-blue.svg)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![React](https://img.shields.io/badge/React-19.2-61dafb.svg)](https://react.dev/)
