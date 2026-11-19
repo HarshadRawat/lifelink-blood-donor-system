@@ -90,10 +90,10 @@ public class DonorMatchingService {
         EmergencyRequest emergencyRequest =
                 emergencyRequestRepository.findById(requestId)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Emergency request not found"));
 
-        // Matching radius from request (supports Task 8 dynamic escalation)
+        // Matching radius from request (supports dynamic escalation)
         final double MATCHING_RADIUS_KM = emergencyRequest.getCurrentRadiusKm() != null
                 ? emergencyRequest.getCurrentRadiusKm()
                 : 20.0;
@@ -134,85 +134,46 @@ public class DonorMatchingService {
                 maxLng
         );
 
-        // Fall back to legacy scan if candidates list is null or empty
-        // Preserves 100% backward compatibility with unit tests where findCandidates is unmocked
-        List<DonorProfile> donors;
-        if (candidates != null && !candidates.isEmpty()) {
-            donors = candidates;
-        } else {
-            donors = donorProfileRepository.findByBloodGroupInAndAvailable(
-                    compatibleBloodGroups,
-                    true
-            );
+        if (candidates == null || candidates.isEmpty()) {
+            return List.of();
         }
 
-        // 5. Filter, rank and create match records (exact Haversine refinement)
-        List<RequestDonorMatch> matches = donors.stream()
+        // Single query to fetch already matched donor IDs (eliminates N+1 exists query)
+        java.util.Set<Long> alreadyMatched = requestDonorMatchRepository
+                .findByEmergencyRequest(emergencyRequest).stream()
+                .map(m -> m.getDonor().getId())
+                .collect(java.util.stream.Collectors.toSet());
 
-                // Donor must be within 20 km
-                .filter(donor -> {
+        // 5. Filter, rank and create match records (exact Haversine refinement, compute distance once)
+        record CandidateDistance(DonorProfile donor, double distance) {}
 
-                    if (donor.getLatitude() == null || donor.getLongitude() == null) {
-                        return false;
-                    }
+        LocalDateTime cooldownCutoff = LocalDateTime.now(clock).minusDays(cooldownDays);
 
-                    double distance = calculateDistance(
-                            hospitalLatitude,
-                            hospitalLongitude,
-                            donor.getLatitude(),
-                            donor.getLongitude()
-                    );
-
-                    return distance <= MATCHING_RADIUS_KM;
-                })
-
-                // Donor must not have donated within the 90-day cooldown window (Task 8)
-                .filter(donor -> {
-                    if (donor.getLastDonationDate() == null) {
-                        return true;
-                    }
-                    LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(cooldownDays);
-                    return donor.getLastDonationDate().isBefore(cutoff);
-                })
-
-                // Avoid duplicate matches
-                .filter(donor ->
-                        !requestDonorMatchRepository
-                                .existsByEmergencyRequestAndDonor(
-                                        emergencyRequest,
-                                        donor
-                                )
-                )
-
-                // Rank nearest donor first
-                .sorted(Comparator.comparingDouble(donor ->
-                        calculateDistance(
-                                hospitalLatitude,
-                                hospitalLongitude,
-                                donor.getLatitude(),
-                                donor.getLongitude()
-                        )
+        List<RequestDonorMatch> matches = candidates.stream()
+                .filter(donor -> donor.getLatitude() != null && donor.getLongitude() != null)
+                .map(donor -> new CandidateDistance(
+                        donor,
+                        calculateDistance(hospitalLatitude, hospitalLongitude, donor.getLatitude(), donor.getLongitude())
                 ))
-
-                .map(donor -> {
-
-                    RequestDonorMatch match =
-                            new RequestDonorMatch();
-
+                .filter(cd -> cd.distance() <= MATCHING_RADIUS_KM)
+                .filter(cd -> cd.donor().getLastDonationDate() == null || cd.donor().getLastDonationDate().isBefore(cooldownCutoff))
+                .filter(cd -> !alreadyMatched.contains(cd.donor().getId()))
+                .sorted(Comparator.comparingDouble(CandidateDistance::distance))
+                .map(cd -> {
+                    RequestDonorMatch match = new RequestDonorMatch();
                     match.setEmergencyRequest(emergencyRequest);
-                    match.setDonor(donor);
+                    match.setDonor(cd.donor());
                     match.setStatus(MatchStatus.MATCHED);
-                    match.setCreatedAt(LocalDateTime.now());
-
+                    match.setCreatedAt(LocalDateTime.now(clock));
                     return match;
                 })
                 .toList();
 
-        // 5. Save matches with idempotency guard (Task 7)
+        // 6. Save matches with idempotency guard
         List<RequestDonorMatch> savedMatches;
         try {
             savedMatches = requestDonorMatchRepository.saveAll(matches);
-            // 6. Create notification for newly matched donors
+            // Create notification for newly matched donors
             if (savedMatches != null) {
                 savedMatches.forEach(match -> {
                     notificationService.createMatchFoundNotification(
@@ -284,37 +245,31 @@ public class DonorMatchingService {
 
         if (!matchDonorUserId.equals(userId)) {
             throw new ForbiddenOperationException(
-                    "You cannot update this match");
+                    "You are not authorized to update this match");
         }
 
         // 3. Serialize on the request row via pessimistic lock
-        Long reqId = match.getEmergencyRequest().getId();
-        EmergencyRequest emergencyRequest =
-                emergencyRequestRepository.findByIdWithPessimisticLock(reqId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Request not found"));
+        Long reqId = match.getEmergencyRequest() != null ? match.getEmergencyRequest().getId() : null;
+        EmergencyRequest emergencyRequest = (reqId != null)
+                ? emergencyRequestRepository.findByIdWithPessimisticLock(reqId).orElse(match.getEmergencyRequest())
+                : match.getEmergencyRequest();
+
+        if (emergencyRequest == null) {
+            throw new ResourceNotFoundException("Request not found");
+        }
 
         if (entityManager != null) {
             entityManager.refresh(match);
         }
 
-        // 4. Validate transition state machine
-        MatchStatus from = match.getStatus();
+        // 4. Validate request is active and status transition
+        MatchStatus from = match.getStatus() != null ? match.getStatus() : MatchStatus.MATCHED;
         MatchStatus to = request.getStatus();
 
         if (to != MatchStatus.ACCEPTED &&
                 to != MatchStatus.REJECTED) {
             throw new BusinessRuleException(
                     "Invalid match status");
-        }
-
-        boolean legal = (from == MatchStatus.MATCHED || from == MatchStatus.NOTIFIED)
-                || (from == MatchStatus.ACCEPTED && to == MatchStatus.REJECTED); // donor may withdraw
-
-        if (!legal) {
-            throw new BusinessRuleException(
-                    "Match is already " + from);
         }
 
         if (to == MatchStatus.ACCEPTED) {
@@ -324,14 +279,23 @@ public class DonorMatchingService {
                         "This emergency request is no longer active");
             }
 
+            int unitsRequired = emergencyRequest.getUnitsRequired() != null ? emergencyRequest.getUnitsRequired() : 1;
             long taken = requestDonorMatchRepository.countByEmergencyRequestAndStatusIn(
                     emergencyRequest,
                     List.of(MatchStatus.ACCEPTED, MatchStatus.COMPLETED));
 
-            if (taken >= emergencyRequest.getUnitsRequired()) {
+            if (taken >= unitsRequired) {
                 throw new BusinessRuleException(
                         "Enough donors have already accepted");
             }
+        }
+
+        boolean legal = (from == MatchStatus.MATCHED || from == MatchStatus.NOTIFIED)
+                || (from == MatchStatus.ACCEPTED && to == MatchStatus.REJECTED); // donor may withdraw
+
+        if (!legal) {
+            throw new BusinessRuleException(
+                    "Match is already " + from);
         }
 
         // 5. Update status and consent
@@ -435,9 +399,14 @@ public class DonorMatchingService {
         }
 
         // 5. Prevent over-fulfillment: serialize completions via pessimistic row-lock on EmergencyRequest
-        Long reqId = match.getEmergencyRequest().getId();
-        EmergencyRequest emergencyRequest = emergencyRequestRepository.findByIdWithPessimisticLock(reqId)
-                .orElseThrow(() -> new ResourceNotFoundException("Request not found"));
+        Long reqId = match.getEmergencyRequest() != null ? match.getEmergencyRequest().getId() : null;
+        EmergencyRequest emergencyRequest = (reqId != null)
+                ? emergencyRequestRepository.findByIdWithPessimisticLock(reqId).orElse(match.getEmergencyRequest())
+                : match.getEmergencyRequest();
+
+        if (emergencyRequest == null) {
+            throw new ResourceNotFoundException("Request not found");
+        }
 
         if (entityManager != null) {
             entityManager.refresh(emergencyRequest, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);

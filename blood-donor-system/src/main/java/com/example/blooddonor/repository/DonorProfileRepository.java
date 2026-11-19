@@ -14,11 +14,6 @@ public interface DonorProfileRepository
 
     Optional<DonorProfile> findByUser(User user);
 
-    List<DonorProfile> findByBloodGroupInAndAvailable(
-            List<String> bloodGroups,
-            boolean available
-    );
-
     @Query("""
         SELECT d FROM DonorProfile d
         WHERE d.available = true

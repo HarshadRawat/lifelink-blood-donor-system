@@ -107,16 +107,8 @@ public class DonorMatchingServiceTest {
                 .thenReturn(Optional.of(request));
 
         when(donorProfileRepository
-                .findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+                .findCandidates(anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(List.of(donor2, donor1));
-
-        when(requestDonorMatchRepository
-                .existsByEmergencyRequestAndDonor(request, donor1))
-                .thenReturn(false);
-
-        when(requestDonorMatchRepository
-                .existsByEmergencyRequestAndDonor(request, donor2))
-                .thenReturn(false);
 
         when(requestDonorMatchRepository.saveAll(anyList()))
                 .thenAnswer(invocation -> {
@@ -209,12 +201,14 @@ public class DonorMatchingServiceTest {
                 .thenReturn(Optional.of(request));
 
         when(donorProfileRepository
-                .findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+                .findCandidates(anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(List.of(donor));
 
-        when(requestDonorMatchRepository
-                .existsByEmergencyRequestAndDonor(request, donor))
-                .thenReturn(true);
+        RequestDonorMatch existing = new RequestDonorMatch();
+        existing.setDonor(donor);
+        existing.setEmergencyRequest(request);
+        when(requestDonorMatchRepository.findByEmergencyRequest(request))
+                .thenReturn(List.of(existing));
 
         when(requestDonorMatchRepository.saveAll(anyList()))
                 .thenReturn(List.of());
@@ -1353,11 +1347,6 @@ public class DonorMatchingServiceTest {
                 anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(List.of(donor2, donor1)); // returned unsorted from SQL
 
-        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, donor1))
-                .thenReturn(false);
-        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, donor2))
-                .thenReturn(false);
-
         when(requestDonorMatchRepository.saveAll(anyList()))
                 .thenAnswer(invocation -> {
                     List<RequestDonorMatch> matches = invocation.getArgument(0);
@@ -1475,9 +1464,6 @@ public class DonorMatchingServiceTest {
         when(donorProfileRepository.findCandidates(
                 anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(List.of(insideDonor));
-
-        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, insideDonor))
-                .thenReturn(false);
 
         when(requestDonorMatchRepository.saveAll(anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -1601,9 +1587,8 @@ public class DonorMatchingServiceTest {
         donor.setLongitude(77.7500);
 
         when(emergencyRequestRepository.findById(10L)).thenReturn(Optional.of(request));
-        when(donorProfileRepository.findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+        when(donorProfileRepository.findCandidates(anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(List.of(donor));
-        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, donor)).thenReturn(false);
 
         // Simulate concurrent duplicate insert throwing DataIntegrityViolationException on uk_request_donor
         when(requestDonorMatchRepository.saveAll(anyList()))
@@ -1663,7 +1648,7 @@ public class DonorMatchingServiceTest {
         donor.setLastDonationDate(LocalDateTime.now().minusDays(30));
 
         when(emergencyRequestRepository.findById(20L)).thenReturn(Optional.of(request));
-        when(donorProfileRepository.findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+        when(donorProfileRepository.findCandidates(anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(List.of(donor));
         when(requestDonorMatchRepository.saveAll(anyList())).thenReturn(List.of());
 
@@ -1714,9 +1699,8 @@ public class DonorMatchingServiceTest {
         match.setStatus(MatchStatus.MATCHED);
 
         when(emergencyRequestRepository.findById(21L)).thenReturn(Optional.of(request));
-        when(donorProfileRepository.findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+        when(donorProfileRepository.findCandidates(anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(List.of(donor));
-        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, donor)).thenReturn(false);
         when(requestDonorMatchRepository.saveAll(anyList())).thenReturn(List.of(match));
 
         List<RequestDonorMatchResponse> matches = donorMatchingService.findMatches(21L);
@@ -1764,9 +1748,8 @@ public class DonorMatchingServiceTest {
         match.setStatus(MatchStatus.MATCHED);
 
         when(emergencyRequestRepository.findById(22L)).thenReturn(Optional.of(request));
-        when(donorProfileRepository.findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+        when(donorProfileRepository.findCandidates(anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(List.of(donor));
-        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(request, donor)).thenReturn(false);
         when(requestDonorMatchRepository.saveAll(anyList())).thenReturn(List.of(match));
 
         List<RequestDonorMatchResponse> matches = donorMatchingService.findMatches(22L);
@@ -1890,7 +1873,7 @@ public class DonorMatchingServiceTest {
         standardRequest.setCurrentRadiusKm(20.0);
 
         when(emergencyRequestRepository.findById(41L)).thenReturn(Optional.of(standardRequest));
-        when(donorProfileRepository.findByBloodGroupInAndAvailable(anyList(), any(Boolean.class)))
+        when(donorProfileRepository.findCandidates(anyList(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(List.of(distantDonor));
 
         List<RequestDonorMatchResponse> standardMatches = donorMatchingService.findMatches(41L);
@@ -1912,8 +1895,6 @@ public class DonorMatchingServiceTest {
         match.setStatus(MatchStatus.MATCHED);
 
         when(emergencyRequestRepository.findById(42L)).thenReturn(Optional.of(escalatedRequest));
-        when(requestDonorMatchRepository.existsByEmergencyRequestAndDonor(escalatedRequest, distantDonor))
-                .thenReturn(false);
         when(requestDonorMatchRepository.saveAll(anyList())).thenReturn(List.of(match));
 
         List<RequestDonorMatchResponse> escalatedMatches = donorMatchingService.findMatches(42L);
