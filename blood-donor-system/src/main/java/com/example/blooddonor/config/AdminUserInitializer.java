@@ -36,10 +36,18 @@ public class AdminUserInitializer implements CommandLineRunner {
             return;
         }
 
-        if (!userRepository.existsByRole(Role.ADMIN)) {
+        String targetEmail = (adminEmail != null && !adminEmail.isBlank()) ? adminEmail : "admin@lifelink.com";
+        java.util.Optional<User> existingAdmin = userRepository.findByEmail(targetEmail);
+
+        if (existingAdmin.isPresent()) {
+            User admin = existingAdmin.get();
+            admin.setPassword(passwordEncoder.encode(adminPassword));
+            userRepository.save(admin);
+            log.info("Synchronized administrative account password for: {}", admin.getEmail());
+        } else if (!userRepository.existsByRole(Role.ADMIN)) {
             User admin = new User();
             admin.setName("LifeLink System Admin");
-            admin.setEmail(adminEmail != null && !adminEmail.isBlank() ? adminEmail : "admin@lifelink.com");
+            admin.setEmail(targetEmail);
             admin.setPassword(passwordEncoder.encode(adminPassword));
             admin.setRole(Role.ADMIN);
 
