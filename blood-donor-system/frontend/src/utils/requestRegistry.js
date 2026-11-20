@@ -42,6 +42,7 @@ export const registerHospitalRequest = (request, hospitalProfile = null) => {
       bloodGroup: request.bloodGroup || '',
       urgency: request.urgency || '',
       unitsRequired: request.unitsRequired || 1,
+      status: request.status || 'ACTIVE',
       createdAt: request.createdAt || new Date().toISOString()
     };
 
@@ -72,6 +73,7 @@ export const registerHospitalRequestsList = (requestsList, hospitalProfile = nul
           bloodGroup: req.bloodGroup || registry[req.id]?.bloodGroup || '',
           urgency: req.urgency || registry[req.id]?.urgency || '',
           unitsRequired: req.unitsRequired || registry[req.id]?.unitsRequired || 1,
+          status: req.status || registry[req.id]?.status || 'ACTIVE',
           createdAt: req.createdAt || registry[req.id]?.createdAt || new Date().toISOString()
         };
         updated = true;
@@ -86,6 +88,20 @@ export const registerHospitalRequestsList = (requestsList, hospitalProfile = nul
   }
 };
 
+export const markRequestCancelledInRegistry = (requestId) => {
+  if (!requestId) return;
+  try {
+    const registry = getRegistry();
+    if (!registry[requestId]) {
+      registry[requestId] = { id: requestId };
+    }
+    registry[requestId].status = 'CANCELLED';
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(registry));
+  } catch (e) {
+    console.warn('Failed to mark request cancelled in registry', e);
+  }
+};
+
 export const getRequestDetails = (requestId) => {
   if (!requestId) return null;
   const registry = getRegistry();
@@ -95,6 +111,7 @@ export const getRequestDetails = (requestId) => {
     city: 'Local Region',
     bloodGroup: '',
     urgency: '',
-    unitsRequired: 1
+    unitsRequired: 1,
+    status: 'ACTIVE'
   };
 };

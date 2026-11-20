@@ -24,7 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { Modal } from '../components/Modal';
 import { UrgencyBadge, RequestStatusBadge, MatchStatusBadge } from '../components/Badges';
-import { registerHospitalRequest, registerHospitalRequestsList } from '../utils/requestRegistry';
+import { registerHospitalRequest, registerHospitalRequestsList, markRequestCancelledInRegistry } from '../utils/requestRegistry';
 
 export function HospitalDashboard() {
   const { user } = useAuth();
@@ -74,6 +74,37 @@ export function HospitalDashboard() {
   const [matchedDonors, setMatchedDonors] = useState([]);
   const [matchesModalLoading, setMatchesModalLoading] = useState(false);
   const [isMatchesModalOpen, setIsMatchesModalOpen] = useState(false);
+
+  // Cancel Request Confirmation Modal State
+  const [cancellingRequestId, setCancellingRequestId] = useState(null);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+
+  const handleOpenCancelModal = (requestId) => {
+    setCancellingRequestId(requestId);
+    setIsCancelModalOpen(true);
+  };
+
+  const handleConfirmCancelRequest = async () => {
+    if (!cancellingRequestId) return;
+    try {
+      setCancelSubmitting(true);
+      await api.emergency.updateStatus(cancellingRequestId, 'CANCELLED');
+      markRequestCancelledInRegistry(cancellingRequestId);
+      showToast(
+        'Request Cancelled',
+        `Emergency Request #${cancellingRequestId} was cancelled and matched donors have been notified.`,
+        'info'
+      );
+      setIsCancelModalOpen(false);
+      setCancellingRequestId(null);
+      fetchRequests();
+    } catch (err) {
+      showToast('Cancellation Failed', err.message || 'Failed to cancel request.', 'error');
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
 
   // Fetch Hospital Emergency Requests
   const fetchRequests = useCallback(async () => {
@@ -572,7 +603,7 @@ export function HospitalDashboard() {
                               <Check size={14} /> Mark Fulfilled
                             </button>
                             <button
-                              onClick={() => handleUpdateStatus(req.id, 'CANCELLED')}
+                              onClick={() => handleOpenCancelModal(req.id)}
                               className="btn-action-cancel"
                               title="Cancel this emergency request"
                             >
@@ -1026,6 +1057,62 @@ export function HospitalDashboard() {
             ))}
           </div>
         )}
+      </Modal>
+
+      {/* Cancel Emergency Request Confirmation Modal */}
+      <Modal
+        isOpen={isCancelModalOpen}
+        onClose={() => !cancelSubmitting && setIsCancelModalOpen(false)}
+        title="Cancel Emergency Request"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="text-center pt-1 pb-2">
+            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-2.5 shadow-2xs">
+              <AlertCircle size={24} />
+            </div>
+            <h4 className="text-base font-bold text-slate-900 m-0">
+              Cancel Emergency Request #{cancellingRequestId}?
+            </h4>
+            <p className="text-xs text-slate-500 mt-1 mb-0">
+              Are you sure you want to cancel this emergency blood broadcast?
+            </p>
+          </div>
+
+          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5 space-y-2 text-xs text-slate-700">
+            <div className="flex items-start gap-2">
+              <span className="text-amber-600 font-bold">•</span>
+              <span>All matched and notified donors will immediately receive a cancellation alert.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-amber-600 font-bold">•</span>
+              <span>Donors will no longer be able to accept or coordinate for this ticket.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-amber-600 font-bold">•</span>
+              <span>This ticket will be permanently marked as <strong>CANCELLED</strong> in the hospital registry.</span>
+            </div>
+          </div>
+
+          <div className="modal-footer pt-3">
+            <button
+              type="button"
+              onClick={() => setIsCancelModalOpen(false)}
+              disabled={cancelSubmitting}
+              className="modal-btn-cancel text-xs py-2 px-3.5"
+            >
+              Keep Request Active
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmCancelRequest}
+              disabled={cancelSubmitting}
+              className="modal-btn-submit bg-red-600 hover:bg-red-700 text-white text-xs py-2 px-4 shadow-xs"
+            >
+              {cancelSubmitting ? 'Cancelling...' : 'Yes, Cancel Request'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

@@ -73,6 +73,7 @@ export function MatchStatusBadge({ status }) {
     case 'COMPLETED':
       badgeStyle = 'badge-completed';
       break;
+    case 'CANCELLED':
     case 'REJECTED':
       badgeStyle = 'badge-cancelled';
       break;

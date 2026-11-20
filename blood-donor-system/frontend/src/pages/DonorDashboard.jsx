@@ -18,7 +18,8 @@ import {
   ShieldCheck,
   Building2,
   Trash2,
-  ShieldAlert
+  ShieldAlert,
+  XCircle
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -29,7 +30,7 @@ import { getRequestDetails } from '../utils/requestRegistry';
 
 export function DonorDashboard() {
   const { user, logout } = useAuth();
-  const { showToast, fetchNotifications } = useNotifications();
+  const { showToast, fetchNotifications, notifications } = useNotifications();
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
@@ -439,6 +440,16 @@ export function DonorDashboard() {
                 <div className="matches-list space-y-4">
                   {matches.map((match) => {
                     const details = getRequestDetails(match.emergencyRequestId);
+                    const isCancelled =
+                      match.requestStatus === 'CANCELLED' ||
+                      details?.status === 'CANCELLED' ||
+                      (Array.isArray(notifications) &&
+                        notifications.some(
+                          (n) =>
+                            n.type === 'REQUEST_CANCELLED' &&
+                            Number(n.emergencyRequestId) === Number(match.emergencyRequestId)
+                        ));
+
                     return (
                       <div key={match.id} className="match-card">
                         <div className="match-card-header">
@@ -465,7 +476,7 @@ export function DonorDashboard() {
                             </div>
                           </div>
 
-                          <MatchStatusBadge status={match.status} />
+                          <MatchStatusBadge status={isCancelled ? 'CANCELLED' : match.status} />
                         </div>
 
                       <div className="match-card-body mt-3 pt-3 border-t text-sm">
@@ -478,7 +489,22 @@ export function DonorDashboard() {
                           </div>
                         </div>
 
-                        {match.status === 'MATCHED' || match.status === 'NOTIFIED' ? (
+                        {isCancelled ? (
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-700">
+                            <div className="flex items-center gap-2">
+                              <XCircle size={16} className="text-slate-400 shrink-0" />
+                              <div>
+                                <span className="font-bold text-slate-800 block">Emergency Request Cancelled</span>
+                                <span className="text-[11px] text-slate-500">
+                                  The requesting hospital has cancelled this emergency blood request. No further donor coordination is needed.
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 text-slate-600 rounded uppercase">
+                              Cancelled
+                            </span>
+                          </div>
+                        ) : match.status === 'MATCHED' || match.status === 'NOTIFIED' ? (
                           <div className="flex items-center justify-between gap-3 pt-1">
                             <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md font-medium">
                               Emergency match: Willing to coordinate for this patient?
