@@ -36,8 +36,7 @@ public interface EmergencyRequestRepository
             @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff
     );
 
-    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
-    @org.springframework.data.jpa.repository.Query("SELECT r FROM EmergencyRequest r WHERE r.id = :id")
+    @org.springframework.data.jpa.repository.Query(value = "SELECT * FROM emergency_requests WHERE id = :id FOR UPDATE", nativeQuery = true)
     java.util.Optional<EmergencyRequest> findByIdWithPessimisticLock(
             @org.springframework.data.repository.query.Param("id") Long id
     );

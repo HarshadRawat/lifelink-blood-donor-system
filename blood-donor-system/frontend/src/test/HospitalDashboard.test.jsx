@@ -291,6 +291,9 @@ describe('HospitalDashboard', () => {
       await waitFor(() => screen.getByRole('button', { name: /Cancel/i }));
       fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
 
+      await waitFor(() => screen.getByRole('button', { name: /Yes, Cancel Request/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Yes, Cancel Request/i }));
+
       await waitFor(() => {
         expect(api.emergency.updateStatus).toHaveBeenCalledWith(42, 'CANCELLED');
       });

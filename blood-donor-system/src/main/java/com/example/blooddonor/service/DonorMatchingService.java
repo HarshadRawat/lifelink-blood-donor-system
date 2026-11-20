@@ -409,7 +409,7 @@ public class DonorMatchingService {
         }
 
         if (entityManager != null) {
-            entityManager.refresh(emergencyRequest, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            entityManager.refresh(emergencyRequest);
         }
 
         int fulfilled = emergencyRequest.getUnitsFulfilled() != null ? emergencyRequest.getUnitsFulfilled() : 0;

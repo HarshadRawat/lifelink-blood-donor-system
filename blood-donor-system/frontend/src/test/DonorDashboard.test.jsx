@@ -13,6 +13,7 @@
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { DonorDashboard } from '../pages/DonorDashboard';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -77,7 +78,11 @@ const MOCK_MATCH = {
 };
 
 function renderDonorDashboard() {
-  return render(<DonorDashboard />);
+  return render(
+    <MemoryRouter>
+      <DonorDashboard />
+    </MemoryRouter>
+  );
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -102,14 +107,14 @@ describe('DonorDashboard', () => {
       expect(screen.getByRole('button', { name: /Set Up Donor Profile/i })).toBeInTheDocument();
     });
 
-    it('shows No Active Matches Yet when matches are empty and profile missing', async () => {
+    it('shows No Pending Emergency Calls when matches are empty and profile missing', async () => {
       api.donor.getProfile.mockRejectedValue(new Error('Not found'));
       api.donor.getMyMatches.mockResolvedValue([]);
 
       renderDonorDashboard();
 
       await waitFor(() => {
-        expect(screen.getByText(/No Active Matches Yet/i)).toBeInTheDocument();
+        expect(screen.getByText(/No Pending Emergency Calls/i)).toBeInTheDocument();
       });
     });
   });
@@ -189,7 +194,7 @@ describe('DonorDashboard', () => {
       renderDonorDashboard();
 
       await waitFor(() => {
-        expect(screen.getByText(/1 Matches/i)).toBeInTheDocument();
+        expect(screen.getByText(/1 Total/i)).toBeInTheDocument();
       });
     });
 

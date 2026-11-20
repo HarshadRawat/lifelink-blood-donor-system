@@ -28,9 +28,11 @@ coverage/
 
 # --- Environment & Secret Configuration ---
 .env
+.env.production
 .env.local
 .env.*.local
 **/.env
+**/.env.production
 **/.env.local
 **/.env.*.local
 !.env.example
