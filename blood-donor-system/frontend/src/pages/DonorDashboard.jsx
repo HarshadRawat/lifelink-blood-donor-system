@@ -385,18 +385,22 @@ export function DonorDashboard() {
                   </div>
 
                   {/* GDPR Privacy & Account Settings */}
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                    <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                      <ShieldCheck size={13} className="text-slate-400" />
-                      <span>GDPR Privacy Guard</span>
+                  <div className="pt-3.5 border-t border-slate-100 mt-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium whitespace-nowrap">
+                        <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
+                        <span>GDPR Privacy</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsDeleteModalOpen(true)}
+                        className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                        title="Permanently erase personal data under GDPR Article 17"
+                      >
+                        <Trash2 size={13} />
+                        <span>Delete Account</span>
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsDeleteModalOpen(true)}
-                      className="text-xs text-red-600 hover:text-red-700 hover:underline font-semibold flex items-center gap-1 cursor-pointer py-1 px-2 rounded hover:bg-red-50 transition"
-                    >
-                      <Trash2 size={13} /> Delete Account
-                    </button>
                   </div>
                 </div>
               )}
@@ -667,33 +671,47 @@ export function DonorDashboard() {
             </label>
           </div>
 
-          <div className="modal-footer flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => {
-                setIsProfileModalOpen(false);
-                setIsDeleteModalOpen(true);
-              }}
-              className="text-xs text-red-600 hover:text-red-700 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
-            >
-              <Trash2 size={13} /> Delete Account (GDPR)
-            </button>
-            <div className="flex items-center gap-2">
+          {/* Danger Zone: GDPR Right to be Forgotten */}
+          <div className="pt-4 mt-2 border-t border-slate-200">
+            <div className="flex items-center justify-between bg-rose-50/60 border border-rose-200/80 rounded-xl p-3">
+              <div>
+                <div className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                  <ShieldAlert size={14} className="text-rose-600" />
+                  <span>Right to be Forgotten (GDPR Art. 17)</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Permanently erase personal contact details & coordinates from the system.
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => setIsProfileModalOpen(false)}
-                className="modal-btn-cancel"
+                onClick={() => {
+                  setIsProfileModalOpen(false);
+                  setIsDeleteModalOpen(true);
+                }}
+                className="shrink-0 text-xs font-bold text-rose-700 hover:text-white hover:bg-rose-600 bg-white border border-rose-300 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={modalSubmitting}
-                className="modal-btn-submit"
-              >
-                {modalSubmitting ? 'Saving...' : 'Save Profile'}
+                <Trash2 size={13} />
+                <span>Delete Account</span>
               </button>
             </div>
+          </div>
+
+          <div className="modal-footer">
+            <button
+              type="button"
+              onClick={() => setIsProfileModalOpen(false)}
+              className="modal-btn-cancel"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={modalSubmitting}
+              className="modal-btn-submit"
+            >
+              {modalSubmitting ? 'Saving...' : 'Save Profile'}
+            </button>
           </div>
         </form>
       </Modal>
@@ -794,42 +812,41 @@ export function DonorDashboard() {
       <Modal
         isOpen={isDeleteModalOpen}
         onClose={() => !deleteSubmitting && setIsDeleteModalOpen(false)}
-        title="Permanently Delete Account (GDPR Article 17)"
+        title="Delete Account (GDPR Article 17)"
+        maxWidth="max-w-md"
       >
         <div className="space-y-4">
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-900 leading-relaxed">
-            <div className="font-bold text-red-700 flex items-center gap-1.5 mb-1.5 text-sm">
-              <ShieldAlert size={18} /> Permanent Account Removal
+          <div className="text-center pt-1 pb-2">
+            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-2.5 shadow-2xs">
+              <Trash2 size={22} />
             </div>
-            You are about to exercise your <strong>Right to be Forgotten</strong> under GDPR Article 17. 
-            This action is irreversible and will execute the following operations:
+            <h4 className="text-base font-bold text-slate-900 m-0">Permanently Erase Account?</h4>
+            <p className="text-xs text-slate-500 mt-1 mb-0">
+              Exercise your <strong>Right to be Forgotten</strong> under GDPR Article 17.
+            </p>
           </div>
 
-          <div className="space-y-2 text-xs text-slate-700">
+          <div className="bg-rose-50/70 border border-rose-200/80 rounded-xl p-3.5 space-y-2 text-xs text-slate-700">
             <div className="flex items-start gap-2">
-              <CheckCircle2 size={14} className="text-red-500 shrink-0 mt-0.5" />
-              <span><strong>Purge PII:</strong> Your name, phone number, physical address, and GPS coordinates will be permanently deleted from the database.</span>
+              <CheckCircle2 size={14} className="text-rose-600 shrink-0 mt-0.5" />
+              <span><strong>PII Erased:</strong> Full name, phone, address, and live GPS coordinates are permanently removed from MySQL.</span>
             </div>
             <div className="flex items-start gap-2">
-              <CheckCircle2 size={14} className="text-red-500 shrink-0 mt-0.5" />
-              <span><strong>Session Invalidation:</strong> All active JWT access tokens and database refresh tokens will be immediately revoked.</span>
+              <CheckCircle2 size={14} className="text-rose-600 shrink-0 mt-0.5" />
+              <span><strong>Sessions Terminated:</strong> Active JWT and refresh tokens are immediately revoked across all devices.</span>
             </div>
             <div className="flex items-start gap-2">
-              <CheckCircle2 size={14} className="text-red-500 shrink-0 mt-0.5" />
-              <span><strong>Immediate Sign-Out:</strong> You will be signed out across all devices and redirected to the login portal.</span>
+              <CheckCircle2 size={14} className="text-rose-600 shrink-0 mt-0.5" />
+              <span><strong>Irreversible:</strong> Donation records and your account cannot be recovered once confirmed.</span>
             </div>
           </div>
 
-          <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-200">
-            ⚠️ If you wish to donate blood or receive emergency requests again in the future, you will need to register a brand new account.
-          </div>
-
-          <div className="modal-footer pt-2">
+          <div className="modal-footer pt-3">
             <button
               type="button"
               onClick={() => setIsDeleteModalOpen(false)}
               disabled={deleteSubmitting}
-              className="modal-btn-cancel"
+              className="modal-btn-cancel text-xs py-2 px-3.5"
             >
               Keep My Account
             </button>
@@ -837,9 +854,9 @@ export function DonorDashboard() {
               type="button"
               onClick={handleDeleteAccount}
               disabled={deleteSubmitting}
-              className="modal-btn-submit bg-red-600 hover:bg-red-700 text-white"
+              className="modal-btn-submit bg-rose-600 hover:bg-rose-700 text-white text-xs py-2 px-4 shadow-xs"
             >
-              {deleteSubmitting ? 'Deleting Account...' : 'Permanently Delete Account'}
+              {deleteSubmitting ? 'Deleting...' : 'Permanently Delete'}
             </button>
           </div>
         </div>
