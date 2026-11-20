@@ -18,9 +18,6 @@ import {
   X,
   Info,
   Mail,
-  Trash2,
-  ShieldAlert,
-  CheckCircle2,
   Activity,
   HeartPulse
 } from 'lucide-react';
@@ -32,29 +29,8 @@ import { UrgencyBadge, RequestStatusBadge, MatchStatusBadge } from '../component
 import { registerHospitalRequest, registerHospitalRequestsList, markRequestCancelledInRegistry } from '../utils/requestRegistry';
 
 export function HospitalDashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { showToast } = useNotifications();
-
-  // GDPR Account Deletion State
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
-
-  const handleDeleteAccount = async () => {
-    try {
-      setDeleteSubmitting(true);
-      await api.user.deleteAccount();
-      showToast(
-        'Account Deleted',
-        'Your hospital account and registration data have been completely deleted in compliance with GDPR.',
-        'success'
-      );
-      logout();
-    } catch (err) {
-      showToast('Deletion Failed', err.message || 'Unable to delete account.', 'error');
-      setDeleteSubmitting(false);
-      setIsDeleteModalOpen(false);
-    }
-  };
 
   // Hospital Profile State
   const [profile, setProfile] = useState(null);
@@ -528,25 +504,6 @@ export function HospitalDashboard() {
                       20 km Radius
                     </span>
                   </div>
-
-                  {/* GDPR Privacy & Account Settings */}
-                  <div className="pt-3.5 border-t border-slate-100 mt-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium whitespace-nowrap">
-                        <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
-                        <span>GDPR Privacy</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsDeleteModalOpen(true)}
-                        className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                        title="Permanently erase facility data under GDPR Article 17"
-                      >
-                        <Trash2 size={13} />
-                        <span>Delete Account</span>
-                      </button>
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
@@ -839,32 +796,6 @@ export function HospitalDashboard() {
           <p className="text-xs text-slate-500 mt-1">
             💡 <strong>Search Radius:</strong> Donors must be within <strong>20.0 km</strong> of the hospital coordinates to match. (Note: 1° difference ≈ 111 km, so coordinates should differ by less than 0.1°).
           </p>
-
-          {/* Danger Zone: GDPR Right to be Forgotten */}
-          <div className="pt-4 mt-2 border-t border-slate-200">
-            <div className="flex items-center justify-between bg-rose-50/60 border border-rose-200/80 rounded-xl p-3">
-              <div>
-                <div className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
-                  <ShieldAlert size={14} className="text-rose-600" />
-                  <span>Right to be Forgotten (GDPR Art. 17)</span>
-                </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">
-                  Permanently erase facility profile, contact details & coordinates from the system.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsProfileModalOpen(false);
-                  setIsDeleteModalOpen(true);
-                }}
-                className="shrink-0 text-xs font-bold text-rose-700 hover:text-white hover:bg-rose-600 bg-white border border-rose-300 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              >
-                <Trash2 size={13} />
-                <span>Delete</span>
-              </button>
-            </div>
-          </div>
 
           <div className="modal-footer">
             <button
@@ -1210,61 +1141,6 @@ export function HospitalDashboard() {
               className="modal-btn-submit bg-red-600 hover:bg-red-700 text-white text-xs py-2 px-4 shadow-xs"
             >
               {cancelSubmitting ? 'Cancelling...' : 'Yes, Cancel Request'}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* GDPR Delete Account Confirmation Modal */}
-      <Modal
-        isOpen={isDeleteModalOpen}
-        onClose={() => !deleteSubmitting && setIsDeleteModalOpen(false)}
-        title="Permanently Delete Account (GDPR Article 17)"
-      >
-        <div className="space-y-4">
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-900 leading-relaxed">
-            <div className="font-bold text-red-700 flex items-center gap-1.5 mb-1.5 text-sm">
-              <ShieldAlert size={18} /> Permanent Account Removal
-            </div>
-            You are about to exercise your <strong>Right to be Forgotten</strong> under GDPR Article 17. 
-            This action is irreversible and will execute the following operations:
-          </div>
-
-          <div className="space-y-2 text-xs text-slate-700">
-            <div className="flex items-start gap-2">
-              <CheckCircle2 size={14} className="text-red-500 shrink-0 mt-0.5" />
-              <span><strong>Purge Hospital Record:</strong> Your facility profile, license verification, address, and GPS coordinates will be permanently deleted.</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <CheckCircle2 size={14} className="text-red-500 shrink-0 mt-0.5" />
-              <span><strong>Session Invalidation:</strong> All active JWT access tokens and database refresh tokens will be immediately revoked.</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <CheckCircle2 size={14} className="text-red-500 shrink-0 mt-0.5" />
-              <span><strong>Immediate Sign-Out:</strong> You will be signed out across all devices and redirected to the login portal.</span>
-            </div>
-          </div>
-
-          <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-200">
-            ⚠️ If you wish to broadcast emergency requests again in the future, you will need to register and re-verify a brand new hospital account.
-          </div>
-
-          <div className="modal-footer pt-2">
-            <button
-              type="button"
-              onClick={() => setIsDeleteModalOpen(false)}
-              disabled={deleteSubmitting}
-              className="modal-btn-cancel"
-            >
-              Keep My Account
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteAccount}
-              disabled={deleteSubmitting}
-              className="modal-btn-submit bg-red-600 hover:bg-red-700 text-white"
-            >
-              {deleteSubmitting ? 'Deleting Account...' : 'Permanently Delete Account'}
             </button>
           </div>
         </div>
