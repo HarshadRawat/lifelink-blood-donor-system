@@ -7,6 +7,7 @@
 [![React](https://img.shields.io/badge/React-19.2-61dafb.svg)](https://react.dev/)
 [![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1.svg)](https://www.mysql.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](docs/DEPLOYMENT.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > Real-time emergency blood coordination platform pairing indexed B-Tree geolocation and ABO/Rh physiological compatibility filtering with STOMP WebSocket push alerts, row-level pessimistic locking, and privacy-first consent-driven contact sharing.
 
@@ -125,3 +126,9 @@ Key decisions and documented trade-offs are detailed in [DECISIONS.md](DECISIONS
 - [ ] **Spatial Indexing with PostGIS**: Migrate bounding-box coordinates to spatial R-Tree / PostGIS `ST_DWithin` indexing for global geographic scale.
 - [ ] **Multi-Node Scheduler Locking**: Integrate ShedLock for horizontally scaled multi-container backend clusters.
 - [ ] **Kubernetes Deployment**: Author Helm charts with automated HPA scaling and ingress controllers.
+
+---
+
+## License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.
