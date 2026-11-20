@@ -14,8 +14,9 @@
 
 ## Live Demo & Verified Credentials
 
-* **Live Demo**: [https://lifelink.onrender.com](https://lifelink.onrender.com) *(Free-tier web service may take up to one minute to wake on initial access)*
-* **Swagger API Documentation**: [https://lifelink-backend.onrender.com/swagger-ui.html](https://lifelink-backend.onrender.com/swagger-ui.html)
+* **Live Web Application**: [https://lifelink-blood-donor-system.vercel.app](https://lifelink-blood-donor-system.vercel.app)
+* **Live API & Health Status**: [https://lifelink-blood-donor-system.onrender.com/actuator/health/liveness](https://lifelink-blood-donor-system.onrender.com/actuator/health/liveness)
+* **Swagger API Documentation**: [https://lifelink-blood-donor-system.onrender.com/swagger-ui.html](https://lifelink-blood-donor-system.onrender.com/swagger-ui.html)
 * **Architecture & Decision Records**: [DECISIONS.md](DECISIONS.md) &nbsp;|&nbsp; **Operational Runbook**: [docs/RUNBOOK.md](docs/RUNBOOK.md)
 
 | Role | Email | Password | Pre-Configured State (Central Bengaluru) |
