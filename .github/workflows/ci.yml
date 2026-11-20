@@ -61,7 +61,7 @@ jobs:
           path: blood-donor-system/target/site/jacoco/
 
       - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         continue-on-error: true
         with:
           files: blood-donor-system/target/site/jacoco/jacoco.xml
