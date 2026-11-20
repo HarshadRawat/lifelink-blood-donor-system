@@ -199,6 +199,32 @@ export function AdminDashboard() {
         </button>
       </div>
 
+      {/* Real-time Emergency Operations Center Banner */}
+      <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-red-950 to-slate-900 text-white shadow-md border border-red-900/40 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-red-600/30 border border-red-500/40 text-red-400">
+            <ShieldCheck size={22} className="animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+              <h3 className="font-bold text-sm text-white tracking-wide uppercase">LifeLink Operations Center Active</h3>
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Platform High Availability • Real-time HIPAA/GDPR Compliance & Institutional Governance.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-semibold">
+          <span className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/15 text-slate-200">
+            Platform Users: <strong className="text-white">{metrics.totalUsers}</strong>
+          </span>
+          <span className="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-200">
+            Pending Approvals: <strong className="text-white">{pendingTotalElements}</strong>
+          </span>
+        </div>
+      </div>
+
       {/* 2. FOUR-COLUMN KPI METRICS GRID */}
       <div className="admin-stats-grid">
         {/* Card 1: Registered Donors */}

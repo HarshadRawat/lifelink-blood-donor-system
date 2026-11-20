@@ -50,9 +50,25 @@ function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/donor/profile"
+                  element={
+                    <ProtectedRoute allowedRoles={['DONOR']}>
+                      <DonorDashboard />
+                    </ProtectedRoute>
+                  }
+                />
 
                 <Route
                   path="/hospital/dashboard"
+                  element={
+                    <ProtectedRoute allowedRoles={['HOSPITAL']}>
+                      <HospitalDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/hospital/profile"
                   element={
                     <ProtectedRoute allowedRoles={['HOSPITAL']}>
                       <HospitalDashboard />

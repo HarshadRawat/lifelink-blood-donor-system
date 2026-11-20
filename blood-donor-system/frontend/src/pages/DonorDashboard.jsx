@@ -21,7 +21,8 @@ import {
   ShieldAlert,
   XCircle,
   Flame,
-  History
+  History,
+  Activity
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -342,6 +343,35 @@ export function DonorDashboard() {
           <RefreshCw size={16} />
           <span>Refresh</span>
         </button>
+      </div>
+
+      {/* Real-time Emergency Mesh Banner */}
+      <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-red-950 to-slate-900 text-white shadow-md border border-red-900/40 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-red-600/30 border border-red-500/40 text-red-400">
+            <Activity size={22} className="animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+              <h3 className="font-bold text-sm text-white tracking-wide uppercase">Donor Emergency Network Active</h3>
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Live within 20 km dispatch zone • Ready to respond to urgent hospital transfusion calls.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-semibold">
+          <span className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/15 text-slate-200">
+            Emergency Dispatch: <strong className="text-white">20 km Radius</strong>
+          </span>
+          <span className={`px-3 py-1.5 rounded-lg border ${profile?.available ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-200' : 'bg-slate-700/50 border-slate-600 text-slate-300'}`}>
+            Readiness: <strong className="text-white">{profile?.available ? 'Available' : 'Unavailable'}</strong>
+          </span>
+          <span className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-200">
+            Active Alerts: <strong className="text-white">{matches.filter(m => m.status === 'MATCHED' || m.status === 'NOTIFIED').length}</strong>
+          </span>
+        </div>
       </div>
 
       {/* Main Grid */}
