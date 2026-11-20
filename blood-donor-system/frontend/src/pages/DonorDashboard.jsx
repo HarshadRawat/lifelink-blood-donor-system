@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Heart, 
   MapPin, 
@@ -15,7 +16,9 @@ import {
   Compass,
   LocateFixed,
   ShieldCheck,
-  Building2
+  Building2,
+  Trash2,
+  ShieldAlert
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -25,8 +28,9 @@ import { MatchStatusBadge, AvailabilityBadge } from '../components/Badges';
 import { getRequestDetails } from '../utils/requestRegistry';
 
 export function DonorDashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { showToast, fetchNotifications } = useNotifications();
+  const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -54,6 +58,28 @@ export function DonorDashboard() {
   });
   const [modalSubmitting, setModalSubmitting] = useState(false);
   const [modalError, setModalError] = useState('');
+
+  // GDPR Account Deletion State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    try {
+      setDeleteSubmitting(true);
+      await api.users.deleteAccount();
+      showToast(
+        'Account Purged',
+        'Your account and personal data have been completely deleted in compliance with GDPR.',
+        'success'
+      );
+      setIsDeleteModalOpen(false);
+      await logout();
+      navigate('/login');
+    } catch (err) {
+      showToast('Deletion Failed', err.message || 'Could not delete account.', 'error');
+      setDeleteSubmitting(false);
+    }
+  };
 
   // Fetch Donor Profile
   const fetchProfile = useCallback(async () => {
@@ -357,6 +383,21 @@ export function DonorDashboard() {
                       20 km Radius
                     </span>
                   </div>
+
+                  {/* GDPR Privacy & Account Settings */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                      <ShieldCheck size={13} className="text-slate-400" />
+                      <span>GDPR Privacy Guard</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsDeleteModalOpen(true)}
+                      className="text-xs text-red-600 hover:text-red-700 hover:underline font-semibold flex items-center gap-1 cursor-pointer py-1 px-2 rounded hover:bg-red-50 transition"
+                    >
+                      <Trash2 size={13} /> Delete Account
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -626,21 +667,33 @@ export function DonorDashboard() {
             </label>
           </div>
 
-          <div className="modal-footer">
+          <div className="modal-footer flex items-center justify-between">
             <button
               type="button"
-              onClick={() => setIsProfileModalOpen(false)}
-              className="modal-btn-cancel"
+              onClick={() => {
+                setIsProfileModalOpen(false);
+                setIsDeleteModalOpen(true);
+              }}
+              className="text-xs text-red-600 hover:text-red-700 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
             >
-              Cancel
+              <Trash2 size={13} /> Delete Account (GDPR)
             </button>
-            <button
-              type="submit"
-              disabled={modalSubmitting}
-              className="modal-btn-submit"
-            >
-              {modalSubmitting ? 'Saving...' : 'Save Profile'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(false)}
+                className="modal-btn-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={modalSubmitting}
+                className="modal-btn-submit"
+              >
+                {modalSubmitting ? 'Saving...' : 'Save Profile'}
+              </button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -735,6 +788,61 @@ export function DonorDashboard() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* GDPR Delete Account Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => !deleteSubmitting && setIsDeleteModalOpen(false)}
+        title="Permanently Delete Account (GDPR Article 17)"
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-900 leading-relaxed">
+            <div className="font-bold text-red-700 flex items-center gap-1.5 mb-1.5 text-sm">
+              <ShieldAlert size={18} /> Permanent Account Removal
+            </div>
+            You are about to exercise your <strong>Right to be Forgotten</strong> under GDPR Article 17. 
+            This action is irreversible and will execute the following operations:
+          </div>
+
+          <div className="space-y-2 text-xs text-slate-700">
+            <div className="flex items-start gap-2">
+              <CheckCircle2 size={14} className="text-red-500 shrink-0 mt-0.5" />
+              <span><strong>Purge PII:</strong> Your name, phone number, physical address, and GPS coordinates will be permanently deleted from the database.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <CheckCircle2 size={14} className="text-red-500 shrink-0 mt-0.5" />
+              <span><strong>Session Invalidation:</strong> All active JWT access tokens and database refresh tokens will be immediately revoked.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <CheckCircle2 size={14} className="text-red-500 shrink-0 mt-0.5" />
+              <span><strong>Immediate Sign-Out:</strong> You will be signed out across all devices and redirected to the login portal.</span>
+            </div>
+          </div>
+
+          <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            ⚠️ If you wish to donate blood or receive emergency requests again in the future, you will need to register a brand new account.
+          </div>
+
+          <div className="modal-footer pt-2">
+            <button
+              type="button"
+              onClick={() => setIsDeleteModalOpen(false)}
+              disabled={deleteSubmitting}
+              className="modal-btn-cancel"
+            >
+              Keep My Account
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              disabled={deleteSubmitting}
+              className="modal-btn-submit bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleteSubmitting ? 'Deleting Account...' : 'Permanently Delete Account'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

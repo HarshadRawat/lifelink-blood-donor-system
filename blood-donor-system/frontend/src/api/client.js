@@ -262,6 +262,14 @@ export const api = {
     getUnreadCount: () => request('/api/notifications/unread-count'),
   },
 
+  // --- USER ACCOUNT & GDPR PRIVACY ---
+  users: {
+    deleteAccount: () =>
+      request('/api/users/me', {
+        method: 'DELETE',
+      }),
+  },
+
   // --- TEST / HEALTH ---
   test: {
     protected: () => request('/api/test/protected'),
