@@ -12,14 +12,18 @@ import {
   ShieldCheck,
   MapPin,
   Calendar,
-  Layers
+  Layers,
+  CheckCircle2,
+  Phone
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { UrgencyBadge, RequestStatusBadge } from '../components/Badges';
 
 export function AdminDashboard() {
   const { user } = useAuth();
+  const { showToast } = useNotifications();
 
   // Metrics State
   const [metrics, setMetrics] = useState({
@@ -33,7 +37,7 @@ export function AdminDashboard() {
   });
   const [metricsLoading, setMetricsLoading] = useState(true);
 
-  // Active Tab: 'requests' | 'users'
+  // Active Tab: 'requests' | 'users' | 'hospitals'
   const [activeTab, setActiveTab] = useState('requests');
 
   // Emergency Requests Table State
@@ -49,6 +53,14 @@ export function AdminDashboard() {
   const [usersPage, setUsersPage] = useState(0);
   const [usersTotalPages, setUsersTotalPages] = useState(0);
   const [usersTotalElements, setUsersTotalElements] = useState(0);
+
+  // Pending Hospitals Table State
+  const [pendingHospitals, setPendingHospitals] = useState([]);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [pendingPage, setPendingPage] = useState(0);
+  const [pendingTotalPages, setPendingTotalPages] = useState(0);
+  const [pendingTotalElements, setPendingTotalElements] = useState(0);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
 
   // Fetch Metrics from DB
   const fetchMetrics = useCallback(async () => {
@@ -101,19 +113,59 @@ export function AdminDashboard() {
     }
   }, []);
 
+  // Fetch Pending Hospitals from DB
+  const fetchPendingHospitals = useCallback(async (page = 0) => {
+    try {
+      setPendingLoading(true);
+      const response = await api.admin.getPendingHospitals({ page, size: 8 });
+      if (response && response.content) {
+        setPendingHospitals(response.content);
+        setPendingTotalPages(response.totalPages || 0);
+        setPendingTotalElements(response.totalElements || 0);
+        setPendingPage(page);
+      }
+    } catch (err) {
+      console.error('Failed to load pending hospitals:', err);
+    } finally {
+      setPendingLoading(false);
+    }
+  }, []);
+
   // Initial Data Fetch
   useEffect(() => {
     fetchMetrics();
     fetchRequests(0);
     fetchUsers(0);
-  }, [fetchMetrics, fetchRequests, fetchUsers]);
+    fetchPendingHospitals(0);
+  }, [fetchMetrics, fetchRequests, fetchUsers, fetchPendingHospitals]);
 
   const handleRefresh = () => {
     fetchMetrics();
+    fetchPendingHospitals(0);
     if (activeTab === 'requests') {
       fetchRequests(requestsPage);
-    } else {
+    } else if (activeTab === 'users') {
       fetchUsers(usersPage);
+    } else {
+      fetchPendingHospitals(pendingPage);
+    }
+  };
+
+  const handleVerifyHospital = async (hospitalId, hospitalName) => {
+    try {
+      setActionLoadingId(hospitalId);
+      await api.admin.verifyHospital(hospitalId, true);
+      showToast(
+        'Hospital Approved',
+        `${hospitalName} has been verified and can now broadcast emergency blood requests.`,
+        'success'
+      );
+      fetchPendingHospitals(pendingPage);
+      fetchMetrics();
+    } catch (err) {
+      showToast('Verification Failed', err.message || 'Could not verify hospital.', 'error');
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -233,6 +285,17 @@ export function AdminDashboard() {
           <span>Registered Users Directory</span>
           <span className="admin-tab-count">{usersTotalElements}</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('hospitals')}
+          className={`admin-tab-btn ${activeTab === 'hospitals' ? 'active' : ''}`}
+        >
+          <Building2 size={16} />
+          <span>Pending Hospital Approvals</span>
+          <span className={`admin-tab-count ${pendingTotalElements > 0 ? 'bg-amber-100 text-amber-800 font-bold' : ''}`}>
+            {pendingTotalElements}
+          </span>
+        </button>
       </div>
 
       {/* 4. TAB CONTENT PANELS */}
@@ -277,19 +340,15 @@ export function AdminDashboard() {
                         <span className="admin-ticket-id">#{req.id}</span>
                       </td>
                       <td>
-                        <div className="admin-hospital-cell">
-                          <span className="admin-hospital-name">{req.hospitalName}</span>
-                          {req.hospitalCity && (
-                            <span className="admin-hospital-city">
-                              <MapPin size={11} /> {req.hospitalCity}
-                            </span>
-                          )}
+                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{req.hospitalName}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <MapPin size={11} /> {req.hospitalCity}
                         </div>
                       </td>
                       <td>
-                        <span className="admin-blood-group">{req.bloodGroup}</span>
+                        <span className="admin-blood-badge">{req.bloodGroup}</span>
                       </td>
-                      <td style={{ fontWeight: 600 }}>
+                      <td style={{ fontWeight: 600, color: '#334155' }}>
                         {req.unitsRequired} {req.unitsRequired === 1 ? 'unit' : 'units'}
                       </td>
                       <td>
@@ -298,8 +357,8 @@ export function AdminDashboard() {
                       <td>
                         <RequestStatusBadge status={req.status} />
                       </td>
-                      <td style={{ color: '#64748b', fontSize: '0.8rem' }}>
-                        {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : 'N/A'}
+                      <td style={{ fontSize: '0.8rem', color: '#64748b', whiteSpace: 'nowrap' }}>
+                        {new Date(req.createdAt).toLocaleDateString()}
                       </td>
                     </tr>
                   ))}
@@ -309,7 +368,7 @@ export function AdminDashboard() {
               {/* Pagination */}
               {requestsTotalPages > 1 && (
                 <div className="admin-pagination-bar">
-                  <span>Page {requestsPage + 1} of {requestsTotalPages} ({requestsTotalElements} total records)</span>
+                  <span>Page {requestsPage + 1} of {requestsTotalPages} ({requestsTotalElements} total requests)</span>
                   <div className="admin-page-btn-group">
                     <button
                       onClick={() => fetchRequests(requestsPage - 1)}
@@ -416,16 +475,102 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {/* 5. FOOTER ARCHITECTURAL NOTE */}
-      <div className="admin-security-note">
-        <ShieldAlert size={20} style={{ color: '#64748b', flexShrink: 0, marginTop: '2px' }} />
-        <div>
-          <strong>Security Architecture & Live Database Verification</strong>
-          <p style={{ margin: '0.25rem 0 0', lineHeight: 1.5 }}>
-            All statistics, emergency tickets, and user accounts displayed on this portal are directly queried from the active MySQL database tables (<code>users</code>, <code>emergency_requests</code>, <code>request_donor_matches</code>) through Spring Security-guarded endpoints (<code>@PreAuthorize("hasRole('ADMIN')")</code>). Zero mock or hardcoded records exist.
-          </p>
+      {/* TAB 3: Pending Hospital Approvals */}
+      {activeTab === 'hospitals' && (
+        <div className="admin-panel-card">
+          <div className="admin-panel-header">
+            <h2 className="admin-panel-title">Pending Hospital Approvals</h2>
+            <p className="admin-panel-sub">
+              Review healthcare facility credentials and grant emergency broadcast authorization
+            </p>
+          </div>
+
+          {pendingLoading ? (
+            <div style={{ textAlign: 'center', padding: '3.5rem 0', color: '#64748b' }}>
+              <RefreshCw className="animate-spin" size={26} style={{ color: '#dc2626', marginBottom: '0.75rem' }} />
+              <p style={{ margin: 0, fontSize: '0.9rem' }}>Loading pending hospitals from database...</p>
+            </div>
+          ) : pendingHospitals.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3.5rem 0', color: '#94a3b8' }}>
+              <CheckCircle2 size={44} style={{ margin: '0 auto 0.75rem', color: '#10b981' }} />
+              <p style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a', margin: '0 0 0.25rem' }}>All Facilities Verified</p>
+              <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>There are no healthcare facilities currently awaiting approval.</p>
+            </div>
+          ) : (
+            <div className="admin-table-wrapper">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Facility ID</th>
+                    <th>Hospital Name</th>
+                    <th>License / Reg No</th>
+                    <th>Address & City</th>
+                    <th>Contact Phone</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingHospitals.map((h) => (
+                    <tr key={h.id}>
+                      <td>
+                        <span className="admin-ticket-id">#{h.id}</span>
+                      </td>
+                      <td style={{ fontWeight: 700, color: '#0f172a' }}>
+                        {h.hospitalName}
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#334155' }}>
+                        {h.registrationNumber}
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '0.85rem', color: '#334155' }}>{h.address}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <MapPin size={11} /> {h.city}
+                        </div>
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#475569' }}>
+                        {h.contactNumber}
+                      </td>
+                      <td>
+                        <button
+                          onClick={() => handleVerifyHospital(h.id, h.hospitalName)}
+                          disabled={actionLoadingId === h.id}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 transition shadow-xs disabled:opacity-50 cursor-pointer"
+                        >
+                          <ShieldCheck size={14} />
+                          <span>{actionLoadingId === h.id ? 'Approving...' : 'Approve & Verify'}</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Pagination */}
+              {pendingTotalPages > 1 && (
+                <div className="admin-pagination-bar">
+                  <span>Page {pendingPage + 1} of {pendingTotalPages} ({pendingTotalElements} pending)</span>
+                  <div className="admin-page-btn-group">
+                    <button
+                      onClick={() => fetchPendingHospitals(pendingPage - 1)}
+                      disabled={pendingPage === 0}
+                      className="admin-page-btn"
+                    >
+                      <ChevronLeft size={14} /> Previous
+                    </button>
+                    <button
+                      onClick={() => fetchPendingHospitals(pendingPage + 1)}
+                      disabled={pendingPage >= pendingTotalPages - 1}
+                      className="admin-page-btn"
+                    >
+                      Next <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
