@@ -36,9 +36,13 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   const login = async (email, password) => {
+    // Clear any previous stale credentials
+    sessionStorage.removeItem('lifelink_token');
+    sessionStorage.removeItem('lifelink_refresh_token');
+    sessionStorage.removeItem('lifelink_user');
     setLoading(true);
     try {
-      const response = await api.auth.login({ email, password });
+      const response = await api.auth.login({ email: email.trim(), password });
       // Synchronously store in sessionStorage immediately
       if (response && response.token) {
         sessionStorage.setItem('lifelink_token', response.token);

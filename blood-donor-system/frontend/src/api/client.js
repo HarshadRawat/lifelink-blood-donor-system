@@ -25,7 +25,12 @@ async function request(endpoint, options = {}) {
     ...options.headers,
   };
 
-  if (token) {
+  const isPublicAuthEndpoint =
+    endpoint.startsWith('/api/auth/login') ||
+    endpoint.startsWith('/api/auth/register') ||
+    endpoint.startsWith('/api/auth/refresh');
+
+  if (token && !isPublicAuthEndpoint) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 

@@ -19,14 +19,15 @@ export function LoginPage() {
     e.preventDefault();
     setErrorMessage('');
 
-    if (!email.trim() || !password.trim()) {
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) {
       setErrorMessage('Please fill in both email and password.');
       return;
     }
 
     setSubmitting(true);
     try {
-      const user = await login(email, password);
+      const user = await login(cleanEmail, password);
       showToast('Welcome back', `Logged in as ${user.name} (${user.role})`, 'success');
 
       // Redirect based on role
