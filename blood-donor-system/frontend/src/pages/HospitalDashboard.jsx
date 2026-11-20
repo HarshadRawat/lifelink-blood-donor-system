@@ -154,6 +154,14 @@ export function HospitalDashboard() {
       setIsProfileModalOpen(true);
       return;
     }
+    if (profile.verified === false) {
+      showToast(
+        'Account Not Verified',
+        'Hospital account has not been verified by an administrator. Emergency requests cannot be created until verified.',
+        'error'
+      );
+      return;
+    }
     setIsCreateRequestModalOpen(true);
   };
 
@@ -340,6 +348,19 @@ export function HospitalDashboard() {
         </div>
       </div>
 
+      {/* Pending Verification Alert Banner */}
+      {!profileLoading && profile && profile.verified === false && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 text-amber-900 shadow-xs">
+          <AlertCircle size={22} className="text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="font-bold text-sm text-amber-900">Hospital Account Pending Administrator Verification</h4>
+            <p className="text-xs text-amber-800 leading-relaxed">
+              Your facility is awaiting administrative approval. Per LifeLink medical safety policies, unverified hospitals cannot broadcast emergency blood requests until an administrator verifies your license.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main Grid */}
       <div className="dashboard-grid">
         {/* Left Column: Hospital Profile */}
@@ -385,7 +406,17 @@ export function HospitalDashboard() {
                   <div className="p-3 bg-red-50/60 rounded-xl border border-red-100">
                     <h4 className="font-bold text-slate-900 text-base">{profile.hospitalName}</h4>
                     <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
-                      <ShieldCheck size={14} className="text-emerald-600" /> Reg: <span className="font-mono">{profile.registrationNumber}</span>
+                      {profile.verified ? (
+                        <>
+                          <ShieldCheck size={14} className="text-emerald-600" />
+                          <span className="text-emerald-700 font-medium">Verified Facility</span> • Reg: <span className="font-mono">{profile.registrationNumber}</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle size={14} className="text-amber-500" />
+                          <span className="text-amber-700 font-medium">Pending Verification</span> • Reg: <span className="font-mono">{profile.registrationNumber}</span>
+                        </>
+                      )}
                     </p>
                   </div>
 
