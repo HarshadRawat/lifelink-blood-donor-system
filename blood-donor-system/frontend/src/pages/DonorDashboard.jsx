@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Heart, 
@@ -19,7 +19,9 @@ import {
   Building2,
   Trash2,
   ShieldAlert,
-  XCircle
+  XCircle,
+  Flame,
+  History
 } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +41,53 @@ export function DonorDashboard() {
 
   const [matches, setMatches] = useState([]);
   const [matchesLoading, setMatchesLoading] = useState(true);
+
+  // Sub-Tab State: 'active' | 'history'
+  const [activeTab, setActiveTab] = useState('active');
+
+  // Helper: check if a match's parent emergency request was cancelled
+  const checkIsCancelled = useCallback(
+    (match) => {
+      const details = getRequestDetails(match.emergencyRequestId);
+      return (
+        match.requestStatus === 'CANCELLED' ||
+        details?.status === 'CANCELLED' ||
+        (Array.isArray(notifications) &&
+          notifications.some(
+            (n) =>
+              n.type === 'REQUEST_CANCELLED' &&
+              Number(n.emergencyRequestId) === Number(match.emergencyRequestId)
+          ))
+      );
+    },
+    [notifications]
+  );
+
+  // Sort matches strictly newest first (by timestamp or ID descending)
+  const sortedMatches = useMemo(() => {
+    return [...matches].sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      if (timeA !== timeB) return timeB - timeA;
+      return (b.id || 0) - (a.id || 0);
+    });
+  }, [matches]);
+
+  // Active Emergencies: MATCHED, NOTIFIED, or ACCEPTED (and not cancelled)
+  const activeMatches = useMemo(() => {
+    return sortedMatches.filter((m) => {
+      if (checkIsCancelled(m)) return false;
+      return m.status === 'MATCHED' || m.status === 'NOTIFIED' || m.status === 'ACCEPTED';
+    });
+  }, [sortedMatches, checkIsCancelled]);
+
+  // History & Resolved: Cancelled, Completed, or Declined matches
+  const historyMatches = useMemo(() => {
+    return sortedMatches.filter((m) => {
+      if (checkIsCancelled(m)) return true;
+      return m.status === 'COMPLETED' || m.status === 'REJECTED';
+    });
+  }, [sortedMatches, checkIsCancelled]);
 
   // Accept / Consent Modal State
   const [acceptingMatch, setAcceptingMatch] = useState(null);
@@ -412,13 +461,62 @@ export function DonorDashboard() {
         {/* Right Column: Emergency Matches List */}
         <div className="dashboard-col-right">
           <div className="card">
-            <div className="card-header border-b pb-4">
+            <div className="card-header border-b pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Droplet size={20} className="text-red-600" />
+                  <Droplet size={20} className="text-red-600 fill-red-100" />
                   <h3 className="card-title">Emergency Donation Matches</h3>
                 </div>
-                <span className="badge badge-active">{matches.length} Matches</span>
+                <span className="badge badge-active">{matches.length} Total</span>
+              </div>
+
+              {/* Sub-Tabs: Active vs History */}
+              <div className="flex items-center gap-2 mt-4 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('active')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                    activeTab === 'active'
+                      ? 'bg-red-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <Flame size={14} className={activeTab === 'active' ? 'text-amber-200' : 'text-slate-400'} />
+                  <span>Active Emergencies</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      activeTab === 'active'
+                        ? 'bg-red-700 text-white'
+                        : activeMatches.length > 0
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {activeMatches.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('history')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                    activeTab === 'history'
+                      ? 'bg-slate-800 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <History size={14} className={activeTab === 'history' ? 'text-slate-300' : 'text-slate-400'} />
+                  <span>History & Resolved</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      activeTab === 'history'
+                        ? 'bg-slate-700 text-white'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {historyMatches.length}
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -428,17 +526,29 @@ export function DonorDashboard() {
                   <div className="spinner" />
                   <p>Searching for emergency matches...</p>
                 </div>
-              ) : matches.length === 0 ? (
-                <div className="empty-state py-12">
-                  <UserCheck size={48} className="empty-icon text-slate-300" />
-                  <p className="empty-title">No Active Matches Yet</p>
-                  <p className="empty-desc">
-                    When a hospital posts an emergency request matching your blood type <strong>({profile?.bloodGroup || 'Set profile'})</strong>, it will appear here instantly.
-                  </p>
+              ) : (activeTab === 'active' ? activeMatches : historyMatches).length === 0 ? (
+                <div className="empty-state py-12 text-center">
+                  {activeTab === 'active' ? (
+                    <>
+                      <CheckCircle2 size={44} className="text-emerald-500 mx-auto mb-2" />
+                      <p className="empty-title">No Pending Emergency Calls</p>
+                      <p className="empty-desc">
+                        You're all caught up! When a hospital within 20 km creates a blood request matching your blood group ({profile?.bloodGroup || 'registered'}), it will appear here instantly.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <History size={44} className="text-slate-400 mx-auto mb-2" />
+                      <p className="empty-title">No History or Resolved Matches</p>
+                      <p className="empty-desc">
+                        Past donation records, fulfilled tickets, and cancelled emergency requests will be archived here.
+                      </p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="matches-list space-y-4">
-                  {matches.map((match) => {
+                  {(activeTab === 'active' ? activeMatches : historyMatches).map((match) => {
                     const details = getRequestDetails(match.emergencyRequestId);
                     const isCancelled =
                       match.requestStatus === 'CANCELLED' ||
